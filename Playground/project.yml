@@ -1,0 +1,88 @@
+name: Playground
+options:
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    ARCHS: "arm64"
+    ONLY_ACTIVE_ARCH: YES
+
+packages:
+  Uzu:
+    path: ../.
+  SFSymbols:
+    url: https://github.com/Rspoon3/SFSymbols
+    exactVersion: 2.6.1
+
+targets:
+  Playground:
+    type: application
+    platform: iOS
+    sources:
+      - path: Playground
+    dependencies:
+      - package: Uzu
+      - package: SFSymbols
+      - sdk: Metal.framework
+    entitlements:
+      path: Playground/Resources/Playground.entitlements
+      properties:
+        com.apple.developer.kernel.increased-memory-limit: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mirai.tech.playground
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"        
+        PRODUCT_NAME: Mirai
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: C39GZ239GY
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator macosx
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 2
+    info:
+      path: Playground/Resources/Playground-Info.plist
+      properties:
+        LSApplicationCategoryType: public.app-category.utilities
+        LSRequiresIPhoneOS: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UIApplicationSupportsIndirectInputEvents: true
+        UIFileSharingEnabled: true
+        UILaunchStoryboardName: LaunchScreen
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSSupportsLiveActivities: true
+    preBuildScripts:
+      - script: |
+          SWIFTGEN_EXEC=""
+          if [ -f "/opt/homebrew/bin/swiftgen" ]; then
+            SWIFTGEN_EXEC="/opt/homebrew/bin/swiftgen"
+          elif [ -f "/usr/local/bin/swiftgen" ]; then
+            SWIFTGEN_EXEC="/usr/local/bin/swiftgen"
+          fi
+
+          if [ -n "$SWIFTGEN_EXEC" ]; then
+            "$SWIFTGEN_EXEC" config run --config "${PROJECT_DIR}/swiftgen.yml"
+          else
+            echo "warning: SwiftGen not installed, skipping code generation. Please run setup.sh"
+          fi
+        name: SwiftGen
+        outputFiles:
+          - "$(SRCROOT)/Playground/Sources/Generated/Assets.swift"
+
+schemes:
+  Playground:
+    shared: true
+    build:
+      targets:
+        Playground: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    archive:
+      config: Release
