@@ -149,7 +149,7 @@ struct ModelRowView: View {
     state: ModelState,
     isSelected: Bool = false
 ) -> some View {
-    let engine = UzuEngine(apiKey: APIKey.miraiSDK)
+    let engine = UzuEngine(apiKey: APIKey.mirai)
     let modelId = "Llama-3.2-3B-Instruct-FP16"
     engine.states[modelId] = state
     let comps = modelId.split(separator: "-")

@@ -10,7 +10,7 @@ struct PlaygroundApp: App {
     @State private var audioController: AudioController
 
     init() {
-        let engine = UzuEngine(apiKey: APIKey.miraiSDK)
+        let engine = UzuEngine(apiKey: APIKey.mirai)
         self.engine = engine
         self.router = Router()
         self.sessionRunner = SessionRunner(sessionProvider: engine)

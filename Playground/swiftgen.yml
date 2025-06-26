@@ -2,9 +2,9 @@
 
 xcassets:
   - inputs:
-      - Playground/Resources/Assets.xcassets
+      - Resources/Assets.xcassets
     outputs:
       - templateName: swift5
         params:
           forceProvidesNamespaces: true
-        output: Playground/Sources/Generated/Assets.swift
+        output: Sources/Generated/Assets.swift

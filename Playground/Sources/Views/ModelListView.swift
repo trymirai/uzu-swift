@@ -375,7 +375,7 @@ struct ModelListView: View {
 
 // MARK: - Previews
 #Preview {
-    let engine = UzuEngine(apiKey: APIKey.miraiSDK)
+    let engine = UzuEngine(apiKey: APIKey.mirai)
     let models = [
         ("Llama-3.2-3B-Instruct-FP16", ModelState.downloaded),
         ("Llama-3.2-1B-Instruct-FP16", ModelState.downloading(progress: 0.32)),
