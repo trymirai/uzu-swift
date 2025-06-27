@@ -2,8 +2,19 @@
 
 [![Platform Compatibility](https://img.shields.io/badge/Platforms-iOS-brightgreen)](https://swift.org/platforms/)
 [![Swift Version](https://img.shields.io/badge/Swift-5.9-orange)](https://swift.org)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+<a href="https://notebooklm.google.com/notebook/5851ef05-463e-4d30-bd9b-01f7668e8f8f/audio"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our Podcast"></a>
+<a href="https://docsend.com/view/x87pcxrnqutb9k2q"><img src="https://img.shields.io/badge/View-Our%20Deck-green" alt="View our Deck"></a>
+<a href="mailto:dima@getmirai.co,Alexey@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Contact%20Us-Email-blue" alt="Contact Us"></a>
 
 A Swift package that lets you run **Mirai's** Metal-accelerated LLMs entirely on-device.
+
+## Features
+
+- On-device inference powered by Metal — no cloud latency or data leakage
+- Unified API for chat, classification, and summarisation tasks
+- Streaming token generation with a real-time progress callback
+- Observable download manager with pause / resume / delete support
 
 ## Installation
 
@@ -88,7 +99,7 @@ try session.load(config: config)
 ```
 
 Once loaded, the same session can be reused for many requests until you drop it.
-Each model can consume up to 4 GB or ram, so it is important one loaded session at a time.
+Each model can consume up to 4 GB of RAM, so it is important to keep only one loaded session at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to your app so it can allocate the necessary memory.
 
 ### Streaming inference
 
@@ -124,19 +135,15 @@ try session.load(config: chatConfig)
 #### Classification
 
 ```swift
-let feature = SessionClassificationFeature(
-    name: "sentiment",
-    values: ["negative", "neutral", "positive"]
-)
-let classificationConfig = SessionConfig(
-    preset: .classification(feature),
+let summarizationConfig = SessionConfig(
+    preset: .summarization,
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: classificationConfig)
+try session.load(config: summarizationConfig)
 ```
 
-After running `session.run(input:.text("I love this phone"), maxTokens:1,… )` the model will reply with one of the provided labels.
+After running `session.run(input:.text(longText), maxTokens:128,… )` the model will reply with a concise summary of the provided text.
 
 #### Summarisation
 
@@ -151,7 +158,7 @@ try session.load(config: sumCfg)
 
 ## Playground
 
-Open the **Playground** target in Xcode—each SwiftUI view (e.g. `ChatView.swift`, `ClassificationView.swift`) contains production-ready snippets you can lift straight into your app.
+The [Playground](Playground) app contains examples of `Uzu` usage in [ChatView.swift](Playground/Sources/Views/ChatView.swift), [ClassificationView.swift](Playground/Sources/Views/ClassificationView.swift), etc.
 
 ## License
 
