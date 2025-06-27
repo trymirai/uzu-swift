@@ -38,10 +38,10 @@ import Uzu
 let engine = UzuEngine(apiKey: "<#YOUR_MIRAI_API_KEY#>")
 ```
 
-Visit [https://platform.trymirai.com/](https://platform.trymirai.com/) to get your API key.
+Visit [Mirai Platform](https://platform.trymirai.com/) to get your API key.
 *It is required to activate your license and use the engine.*
 
-### Refresh the remote registry (optional)
+### Refresh the remote registry
 
 ```swift
 let registry = try await engine.updateRegistry() // fetches the latest list & states
