@@ -12,8 +12,9 @@ struct SummarizationView: View {
 
     // MARK: - Environment
     @Environment(Router.self) private var router
-    @Environment(SessionRunner.self) private var sessionRunner
+    @Environment(UzuEngine.self) private var engine
     @Environment(AudioController.self) private var audioController
+    @State private var session: Session?
 
     // MARK: - Stored Properties
     let modelId: String
@@ -76,25 +77,30 @@ struct SummarizationView: View {
             }
         #endif
         .toolbarRole(.editor)
-        .onChange(of: sessionRunner.state) { _, newState in
-            switch newState {
-            case .ready:
-                viewState = .idle
-            case .error(let err):
-                viewState = .error(err)
-            default:
-                viewState = .loading
-            }
-        }
-        .onAppear {
-            Task(priority: .userInitiated) {
-                await sessionRunner.ensureLoaded(modelId: modelId, preset: .summarization)
+        .task(id: modelId, priority: .userInitiated) {
+            do {
+                let session = try engine.createSession(identifier: modelId)
+                try session.load(
+                    config: SessionConfig(
+                        preset: .summarization,
+                        samplingSeed: .default,
+                        contextLength: .custom(1024)
+                    )
+                )
+                await MainActor.run {
+                    self.session = session
+                    self.viewState = .idle
+                }
+            } catch {
+                await MainActor.run {
+                    self.viewState = .error(error)
+                }
             }
         }
         .onDisappear {
             generationTask?.cancel()
             generationTask = nil
-            sessionRunner.destroy()
+            session = nil
             viewState = .loading
         }
     }
@@ -161,7 +167,13 @@ struct SummarizationView: View {
     private var bottomBar: some View {
         HStack {
             Spacer()
-            Button(action: runSummarisation) {
+            Button(action: {
+                if case .generating = viewState {
+                    stopSummarisation()
+                } else {
+                    runSummarisation()
+                }
+            }) {
                 Text(actionButtonTitle)
                     .font(.monoHeading14Bold)
                     .foregroundStyle(buttonTextColor)
@@ -170,12 +182,19 @@ struct SummarizationView: View {
                     .background(buttonBackgroundColor)
                     .cornerRadius(12)
             }
-            .disabled(!isInputValid || isInputDisabled)
+            .disabled(isActionDisabled)
             Spacer()
         }
     }
 
     // MARK: - Logic – Helpers
+
+    private var isActionDisabled: Bool {
+        if case .generating = viewState {
+            return false
+        }
+        return !isInputValid || isInputDisabled
+    }
 
     private var isInputDisabled: Bool {
         switch viewState {
@@ -195,7 +214,7 @@ struct SummarizationView: View {
         case .loading:
             return "Loading..."
         case .generating:
-            return "Generating..."
+            return "STOP"
         case let .error(error):
             return "Error: \(error.localizedDescription)"
         case .idle:
@@ -204,19 +223,27 @@ struct SummarizationView: View {
     }
 
     private var buttonTextColor: Color {
-        isInputDisabled || !isInputValid
+        if case .generating = viewState {
+            return Asset.Colors.contrast.swiftUIColor
+        }
+        return isInputDisabled || !isInputValid
             ? Asset.Colors.secondary.swiftUIColor : Asset.Colors.contrast.swiftUIColor
     }
 
     private var buttonBackgroundColor: Color {
-        isInputDisabled || !isInputValid
+        if case .generating = viewState {
+            return Asset.Colors.primary.swiftUIColor
+        }
+        return isInputDisabled || !isInputValid
             ? Asset.Colors.card.swiftUIColor : Asset.Colors.primary.swiftUIColor
     }
 
+    private func stopSummarisation() {
+        generationTask?.cancel()
+    }
+
     private func runSummarisation() {
-        guard case .idle = viewState,
-            case .ready = sessionRunner.state
-        else { return }
+        guard case .idle = viewState, let session else { return }
 
         inputFocused = false
         audioController.pause()
@@ -227,24 +254,26 @@ struct SummarizationView: View {
 
         viewState = .generating
 
-        generationTask = Task.detached { [weak sessionRunner] in
-            guard let sessionRunner else { return }
+        generationTask = Task.detached { [session, textToSummarise] in
             let prompt = "Text is: \"\(textToSummarise)\". Write only summary itself."
 
-            guard
-                let finalOutput = try? sessionRunner.run(
-                    input: SessionInput.text(prompt),
-                    maxTokens: 128,
-                    progress: { output in
-                        Task { @MainActor in
-                            summaryText = output.text
-                        }
-                        return !Task.isCancelled
+            let finalOutput = session.run(
+                input: SessionInput.text(prompt),
+                maxTokens: 128,
+                progress: { output in
+                    Task { @MainActor in
+                        self.summaryText = output.text
                     }
-                )
-            else { return }
+                    return !Task.isCancelled
+                }
+            )
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                Task { @MainActor in
+                    viewState = .idle
+                }
+                return
+            }
 
             Task { @MainActor in
                 summaryText = finalOutput.text
@@ -275,7 +304,7 @@ struct SummarizationView: View {
 #Preview {
     NavigationStack {
         SummarizationView(modelId: "Llama-3.2-3B-Instruct")
-            .environment(UzuEngine(apiKey: APIKey.mirai))
+            .environment(UzuEngine(apiKey: APIKey.miraiSDK))
             .environment(Router())
             .environment(AudioController())
     }

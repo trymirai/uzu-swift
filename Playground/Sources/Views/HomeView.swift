@@ -31,7 +31,7 @@ struct HomeView: View {
                 destination: .modelSelection(next: .chat)
             ),
             Feature(
-                icon: .circleRighthalfFilled,
+                icon: .circleLefthalfFilled,
                 title: "Classification",
                 destination: .modelSelection(next: .classification)
             ),
@@ -73,7 +73,6 @@ struct HomeView: View {
             ToolbarItem(placement: .principal) {
                 Image(asset: Asset.Icons.logo)
                     .padding(.top, 24)
-                    .padding(.bottom, 38)
             }
         }
         .toolbarRole(.editor)
@@ -257,7 +256,7 @@ struct HomeView: View {
 #Preview {
     NavigationStack {
         HomeView()
-            .environment(UzuEngine(apiKey: APIKey.mirai))
+            .environment(UzuEngine(apiKey: APIKey.miraiSDK))
             .environment(Router())
             .environment(AudioController())
     }

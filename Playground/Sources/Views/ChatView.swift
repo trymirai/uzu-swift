@@ -55,11 +55,12 @@ struct ChatView: View {
 
     // MARK: - Environment
     @Environment(Router.self) var router
-    @Environment(SessionRunner.self) var sessionRunner
+    @Environment(UzuEngine.self) private var engine
     @Environment(AudioController.self) private var audioController
 
     // MARK: - State
-    // `Session` is managed globally via `SessionRunner`
+    // Local `Session` instance managed by this view
+    @State private var session: Session?
     @State private var messages: [Message] = []
     @State private var inputText: String = ""
     @State private var generationTask: Task<Void, Never>?
@@ -139,71 +140,80 @@ struct ChatView: View {
             }
         #endif
         .toolbarRole(.editor)
-        .onChange(of: sessionRunner.state) { _, newState in
-            switch newState {
-            case .ready:
-                viewState = .idle
-            case let .error(error):
-                viewState = .error(error)
-            default:
-                viewState = .loading
-            }
-        }
-        .onAppear {
-            Task(priority: .userInitiated) {
-                await sessionRunner.ensureLoaded(modelId: modelId, preset: .general)
+        .task(id: modelId, priority: .userInitiated) {
+            do {
+                let session = try engine.createSession(identifier: modelId)
+                try session.load(
+                    config: SessionConfig(
+                        preset: .general,
+                        samplingSeed: .default,
+                        contextLength: .custom(1024)
+                    )
+                )
+                await MainActor.run {
+                    self.session = session
+                    self.viewState = .idle
+                }
+            } catch {
+                await MainActor.run {
+                    self.viewState = .error(error)
+                }
             }
         }
         .onDisappear {
             generationTask?.cancel()
             generationTask = nil
-            sessionRunner.destroy()
+            session = nil
             viewState = .loading
         }
     }
 
     @ViewBuilder
     private var sendMessageButton: some View {
-        Button(action: sendMessage) {
-            Image(symbol: .arrowUp)
-                .font(.body16Semibold)
-                .foregroundStyle(
-                    isInputValid && !isInputDisabled ? .white : Asset.Colors.secondary.swiftUIColor
-                )
-                .frame(width: 28, height: 28)
-                .background(
-                    isInputValid && !isInputDisabled ? .black : Asset.Colors.cardBorder.swiftUIColor
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        if case .generating = viewState {
+            Button(action: stopMessage) {
+                Image(systemName: "square.fill")
+                    .font(.body16Semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button(action: sendMessage) {
+                Image(symbol: .arrowUp)
+                    .font(.body16Semibold)
+                    .foregroundStyle(
+                        isInputValid && !isInputDisabled ? .white : Asset.Colors.secondary.swiftUIColor
+                    )
+                    .frame(width: 28, height: 28)
+                    .background(
+                        isInputValid && !isInputDisabled ? .black : Asset.Colors.cardBorder.swiftUIColor
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .disabled(!isInputValid || isInputDisabled)
+            .buttonStyle(.plain)
+            #if os(macOS)
+                .keyboardShortcut(.defaultAction)
+            #endif
         }
-        .disabled(!isInputValid || isInputDisabled)
-        .buttonStyle(.plain)
-        #if os(macOS)
-            .keyboardShortcut(.defaultAction)
-        #endif
     }
 
     @ViewBuilder
     private var inputView: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack(alignment: .topLeading) {
-                #if os(iOS)
-                    SendTextView(text: $inputText) {
-                        if isInputValid && !isInputDisabled {
-                            sendMessage()
-                        }
+                SendTextView(text: $inputText) {
+                    if isInputValid && !isInputDisabled {
+                        sendMessage()
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .disabled(isInputDisabled)
-                #else
-                    TextField("", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .focused($inputFocused)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .font(.monoBody16)
-                        .disabled(isInputDisabled)
-                #endif
+                }
+                .focused($inputFocused)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .disabled(isInputDisabled)
 
                 Text(inputPlaceholder)
                     .font(.monoBody16)
@@ -213,7 +223,6 @@ struct ChatView: View {
             }
             sendMessageButton
         }
-        .lineLimit(5)
         .padding(12)
         .background(Asset.Colors.card.swiftUIColor)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -277,8 +286,12 @@ struct ChatView: View {
         }
     }
 
+    private func stopMessage() {
+        generationTask?.cancel()
+    }
+
     private func sendMessage() {
-        guard case .idle = viewState else { return }
+        guard case .idle = viewState, let session else { return }
 
         audioController.pause()
         let userInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -292,16 +305,7 @@ struct ChatView: View {
 
         viewState = .generating
 
-        generationTask = Task.detached {
-            [
-                assistantId = assistantMessage.id,
-                messages,
-                weak sessionRunner = self.sessionRunner
-            ] in
-
-            guard let sessionRunner,
-                case .ready = await sessionRunner.state
-            else { return }
+        generationTask = Task.detached { [assistantId = assistantMessage.id, messages, session] in
 
             let inputMessages = messages.dropLast().map { msg -> SessionMessage in
                 let role: SessionMessageRole = (msg.role == .user) ? .user : .assistant
@@ -309,22 +313,28 @@ struct ChatView: View {
             }
             let input = SessionInput.messages(inputMessages)
 
-            guard
-                let finalOutput = try? sessionRunner.run(
-                    input: input,
-                    maxTokens: 128,
-                    progress: { partial in
-                        Task { @MainActor in
-                            if let idx = self.messages.firstIndex(where: { $0.id == assistantId }) {
-                                self.messages[idx].content = partial.text
-                            }
-                        }
-                        return true
+            let finalOutput = session.run(
+                input: input,
+                maxTokens: 128,
+                progress: { partial in
+                    if Task.isCancelled {
+                        return false
                     }
-                )
-            else { return }
+                    Task { @MainActor in
+                        if let idx = self.messages.firstIndex(where: { $0.id == assistantId }) {
+                            self.messages[idx].content = partial.text
+                        }
+                    }
+                    return true
+                }
+            )
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                Task { @MainActor in
+                    self.viewState = .idle
+                }
+                return
+            }
 
             Task { @MainActor in
                 if let idx = self.messages.firstIndex(where: { $0.id == assistantId }) {
@@ -375,7 +385,7 @@ struct ChatView: View {
             viewState: .idle
         )
         .environment(Router())
-        .environment(UzuEngine(apiKey: APIKey.mirai))
+        .environment(UzuEngine(apiKey: APIKey.miraiSDK))
         .environment(AudioController())
     }
 }
@@ -405,7 +415,7 @@ struct ChatView: View {
             viewState: .generating
         )
         .environment(Router())
-        .environment(UzuEngine(apiKey: APIKey.mirai))
+        .environment(UzuEngine(apiKey: APIKey.miraiSDK))
         .environment(AudioController())
     }
 }
@@ -417,6 +427,6 @@ struct ChatView: View {
         viewState: .loading
     )
     .environment(Router())
-    .environment(UzuEngine(apiKey: APIKey.mirai))
+    .environment(UzuEngine(apiKey: APIKey.miraiSDK))
     .environment(AudioController())
 }

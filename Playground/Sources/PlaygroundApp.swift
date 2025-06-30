@@ -6,14 +6,14 @@ import Uzu
 struct PlaygroundApp: App {
     @State private var engine: UzuEngine
     @State private var router: Router
-    @State private var sessionRunner: SessionRunner
+
     @State private var audioController: AudioController
 
     init() {
-        let engine = UzuEngine(apiKey: APIKey.mirai)
+        let engine = UzuEngine(apiKey: APIKey.miraiSDK)
         self.engine = engine
         self.router = Router()
-        self.sessionRunner = SessionRunner(sessionProvider: engine)
+
         self.audioController = AudioController()
     }
 
@@ -40,7 +40,6 @@ struct PlaygroundApp: App {
             }
             .environment(engine)
             .environment(router)
-            .environment(sessionRunner)
             .environment(audioController)
             .tint(Asset.Colors.primary.swiftUIColor)
             .task {

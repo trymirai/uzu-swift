@@ -22,10 +22,11 @@ struct ClassificationView: View {
     // MARK: - Environment
 
     @Environment(Router.self) private var router
-    @Environment(SessionRunner.self) private var sessionRunner
+    @Environment(UzuEngine.self) private var engine
     @Environment(AudioController.self) private var audioController
+    @State private var session: Session?
 
-    // MARK: - State – Session is managed globally via SessionRunner
+    // MARK: - State
 
     @State private var inputText: String = ClassificationView.textsToClassify.randomElement()!
     @State private var resultText: String = ""
@@ -94,25 +95,30 @@ struct ClassificationView: View {
             }
         #endif
         .toolbarRole(.editor)
-        .onAppear {
-            Task(priority: .userInitiated) {
-                await sessionRunner.ensureLoaded(modelId: modelId, preset: .classification(feature))
-            }
-        }
-        .onChange(of: sessionRunner.state) { _, newState in
-            switch newState {
-            case .ready:
-                viewState = .idle
-            case .error(let err):
-                viewState = .error(err)
-            default:
-                viewState = .loading
+        .task(id: modelId, priority: .userInitiated) {
+            do {
+                let session = try engine.createSession(identifier: modelId)
+                try session.load(
+                    config: SessionConfig(
+                        preset: .classification(feature),
+                        samplingSeed: .default,
+                        contextLength: .custom(1024)
+                    )
+                )
+                await MainActor.run {
+                    self.session = session
+                    self.viewState = .idle
+                }
+            } catch {
+                await MainActor.run {
+                    self.viewState = .error(error)
+                }
             }
         }
         .onDisappear {
             generationTask?.cancel()
             generationTask = nil
-            sessionRunner.destroy()
+            session = nil
             viewState = .loading
         }
     }
@@ -180,7 +186,13 @@ struct ClassificationView: View {
     private var bottomBar: some View {
         HStack {
             Spacer()
-            Button(action: runClassification) {
+            Button(action: {
+                if case .generating = viewState {
+                    stopClassification()
+                } else {
+                    runClassification()
+                }
+            }) {
                 Text(actionButtonTitle)
                     .font(.monoHeading14Bold)
                     .foregroundStyle(buttonTextColor)
@@ -189,12 +201,19 @@ struct ClassificationView: View {
                     .background(buttonBackgroundColor)
                     .cornerRadius(12)
             }
-            .disabled(!isInputValid || isInputDisabled)
+            .disabled(isActionDisabled)
             Spacer()
         }
     }
 
     // MARK: - Logic – Helpers
+
+    private var isActionDisabled: Bool {
+        if case .generating = viewState {
+            return false
+        }
+        return !isInputValid || isInputDisabled
+    }
 
     private var isInputDisabled: Bool {
         switch viewState {
@@ -214,7 +233,7 @@ struct ClassificationView: View {
         case .loading:
             return "Loading…"
         case .generating:
-            return "Generating…"
+            return "STOP"
         case let .error(error):
             return "Error: \(error.localizedDescription)"
         case .idle:
@@ -223,17 +242,27 @@ struct ClassificationView: View {
     }
 
     private var buttonTextColor: Color {
-        isInputDisabled || !isInputValid
+        if case .generating = viewState {
+            return Asset.Colors.contrast.swiftUIColor
+        }
+        return isInputDisabled || !isInputValid
             ? Asset.Colors.secondary.swiftUIColor : Asset.Colors.contrast.swiftUIColor
     }
 
     private var buttonBackgroundColor: Color {
-        isInputDisabled || !isInputValid
+        if case .generating = viewState {
+            return Asset.Colors.primary.swiftUIColor
+        }
+        return isInputDisabled || !isInputValid
             ? Asset.Colors.card.swiftUIColor : Asset.Colors.primary.swiftUIColor
     }
 
+    private func stopClassification() {
+        generationTask?.cancel()
+    }
+
     private func runClassification() {
-        guard case .idle = viewState, case .ready = sessionRunner.state else { return }
+        guard case .idle = viewState, let session else { return }
 
         inputFocused = false
         audioController.pause()
@@ -246,24 +275,24 @@ struct ClassificationView: View {
 
         let currentFeature = feature
 
-        generationTask = Task.detached { [weak sessionRunner] in
-            guard let sessionRunner,
-                case .ready = await sessionRunner.state
-            else { return }
+        generationTask = Task.detached { [session, currentFeature, textToClassify] in
 
             let values = currentFeature.values.joined(separator: ", ")
             let prompt =
-                "Text is: \"\(textToClassify)\". Choose \(currentFeature.name) from the list: \(values). Answer with one word. Dont't add dot at the end."
+            "Text is: \"\(textToClassify)\". Choose \(currentFeature.name) from the list: \(values). Answer with one word. Dont't add dot at the end."
 
-            guard
-                let finalOutput = try? sessionRunner.run(
-                    input: SessionInput.text(prompt),
-                    maxTokens: 32,
-                    progress: { _ in !Task.isCancelled }
-                )
-            else { return }
+            let finalOutput = session.run(
+                input: SessionInput.text(prompt),
+                maxTokens: 32,
+                progress: { _ in !Task.isCancelled }
+            )
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                Task { @MainActor in
+                    viewState = .idle
+                }
+                return
+            }
 
             Task { @MainActor in
                 resultText = finalOutput.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -293,7 +322,7 @@ struct ClassificationView: View {
 #Preview {
     NavigationStack {
         ClassificationView(modelId: "Llama-3.2-3B-Instruct")
-            .environment(UzuEngine(apiKey: APIKey.mirai))
+            .environment(UzuEngine(apiKey: APIKey.miraiSDK))
             .environment(Router())
             .environment(AudioController())
     }

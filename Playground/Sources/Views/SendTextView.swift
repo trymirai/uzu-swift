@@ -1,53 +1,53 @@
 import SwiftUI
+
 #if os(iOS)
 import UIKit
+#endif
 
-    struct SendTextView: UIViewRepresentable {
-        @Binding var text: String
-        var onSend: () -> Void
+/// Multiline text input that expands vertically up to five lines and triggers `onSend` on the *Send* key.
+struct SendTextView: View {
+    @Binding var text: String
+    var onSend: () -> Void
 
-        func makeCoordinator() -> Coordinator {
-            Coordinator(parent: self)
-        }
-
-        func makeUIView(context: Context) -> UITextView {
-            let tv = UITextView()
-            tv.delegate = context.coordinator
-            tv.font = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
-            tv.isScrollEnabled = false
-            tv.returnKeyType = .send
-            tv.backgroundColor = .clear
-            tv.textContainerInset = .zero
-            tv.textContainer.lineFragmentPadding = 0
-            tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            return tv
-        }
-
-        func updateUIView(_ uiView: UITextView, context: Context) {
-            if uiView.text != text {
-                uiView.text = text
-            }
-            uiView.isEditable = !context.environment.isEnabled ? false : true
-        }
-
-        class Coordinator: NSObject, UITextViewDelegate {
-            var parent: SendTextView
-            init(parent: SendTextView) { self.parent = parent }
-
-            func textView(
-                _ textView: UITextView, shouldChangeTextIn range: NSRange,
-                replacementText text: String
-            ) -> Bool {
-                if text == "\n" {
-                    parent.onSend()
-                    return false
-                }
-                return true
-            }
-
-            func textViewDidChange(_ textView: UITextView) {
-                parent.text = textView.text
-            }
-        }
+    var body: some View {
+        #if os(iOS)
+        IOSMultilineTextField(text: $text, onSend: onSend)
+        #else
+        MacMultilineTextField(text: $text)
+        #endif
     }
+}
+
+#if os(iOS)
+// MARK: - iOS implementation (SwiftUI TextEditor)
+
+private struct IOSMultilineTextField: View {
+    @Binding var text: String
+    var onSend: () -> Void
+
+    var body: some View {
+        TextField("", text: $text, axis: .vertical)
+            .font(.monoBody16)
+            .lineLimit(5, reservesSpace: false)
+            .onSubmit {
+                onSend()
+            }
+    }
+}
+#endif
+
+#if os(macOS)
+// MARK: - macOS implementation
+
+private struct MacMultilineTextField: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextField("", text: $text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.monoBody16)
+            .lineLimit(1...5)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
 #endif
