@@ -52,7 +52,7 @@ let modelIds = registry.map(\.key)
 
 ```swift
 // start downloading a model by its identifier
-engine.download(identifier: "Llama-3.2-3B-Instruct-FP16")
+engine.download(identifier: "Llama-3.2-1B-Instruct")
 
 // you can also pause / resume / delete
 engine.pause(identifier: id)
@@ -135,15 +135,20 @@ try session.load(config: chatConfig)
 #### Classification
 
 ```swift
-let summarizationConfig = SessionConfig(
-    preset: .summarization,
+let feature = SessionClassificationFeature(
+    name: "sentiment",
+    values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
+)
+
+let classificationConfig = SessionConfig(
+    preset: .classification(feature),
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: summarizationConfig)
+try session.load(config: classificationConfig)
 ```
 
-After running `session.run(input:.text(longText), maxTokens:128,… )` the model will reply with a concise summary of the provided text.
+After running `session.run(input: .text("Your text here"), maxTokens: 32, …)` the model will reply with a single label chosen from `feature.values`.
 
 #### Summarisation
 
@@ -153,7 +158,7 @@ let summarizationConfig = SessionConfig(
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: sumCfg)
+try session.load(config: summarizationConfig)
 ```
 
 ## Playground
