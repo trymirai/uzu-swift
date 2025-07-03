@@ -1,138 +1,157 @@
-# Uzu Swift – Local AI on Apple Silicon
+<p align="center">
+  <picture>
+    <img alt="Mirai" src="https://artifacts.trymirai.com/social/github/header.jpg" style="max-width: 100%;">
+  </picture>
+</p>
 
+<a href="https://notebooklm.google.com/notebook/5851ef05-463e-4d30-bd9b-01f7668e8f8f/audio"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our Podcast"></a>
+<a href="https://docsend.com/view/x87pcxrnqutb9k2q"><img src="https://img.shields.io/badge/View-Our%20Deck-green" alt="View our Deck"></a>
+<a href="mailto:alexey@getmirai.co,dima@getmirai.co,aleksei@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Contact%20Us-Email-blue" alt="Contact Us"></a>
 [![Platform Compatibility](https://img.shields.io/badge/Platforms-iOS-brightgreen)](https://swift.org/platforms/)
 [![Swift Version](https://img.shields.io/badge/Swift-5.9-orange)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-<a href="https://notebooklm.google.com/notebook/5851ef05-463e-4d30-bd9b-01f7668e8f8f/audio"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our Podcast"></a>
-<a href="https://docsend.com/view/x87pcxrnqutb9k2q"><img src="https://img.shields.io/badge/View-Our%20Deck-green" alt="View our Deck"></a>
-<a href="mailto:dima@getmirai.co,Alexey@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Contact%20Us-Email-blue" alt="Contact Us"></a>
 
-A Swift package that lets you run **Mirai's** Metal-accelerated LLMs entirely on-device.
+# uzu-swift
 
-## Features
+Swift package for [uzu](https://github.com/trymirai/uzu), a **high-performance** inference engine for AI models on Apple Silicon. It allows you to deploy AI directly in your app with **zero latency**, **full data privacy**, and **no inference costs**. You don’t need an ML team or weeks of setup - one developer can handle everything in minutes. Key features:
 
-- On-device inference powered by Metal — no cloud latency or data leakage
-- Unified API for chat, classification, and summarisation tasks
-- Streaming token generation with a real-time progress callback
-- Observable download manager with pause / resume / delete support
+- Simple, high-level API
+- Specialized configurations with significant performance boosts for common use cases like classification and summarization
+- [Broad model support](https://trymirai.com/models)
+- Observable model manager
 
-## Installation
+## Quick Start
 
-### Swift Package Manager
+### Setup
 
-Add the following to your `Package.swift` file:
+Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/getmirai/uzu-swift.git", from: "0.1.0")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.0")
 ]
 ```
 
-## Usage
-
-### Bootstrapping the engine
+Set up your project via [Platform](https://platform.trymirai.com) and get an `API_KEY`, and initialize engine:
 
 ```swift
 import Uzu
 
-let engine = UzuEngine(apiKey: "<#YOUR_MIRAI_API_KEY#>")
+let engine = UzuEngine(apiKey: "API_KEY")
 ```
 
-Visit [Mirai Platform](https://platform.trymirai.com/) to get your API key.
-*It is required to activate your license and use the engine.*
+### Model state
 
-### Refresh the remote registry
+Refresh models registry:
 
 ```swift
-let registry = try await engine.updateRegistry() // fetches the latest list & states
-let modelIds = registry.map(\.key)
+let registry = try await engine.updateRegistry()
+let modelIdentifiers = registry.map(\.key)
 ```
 
-### Downloading / managing models
+Control the model's state:
 
 ```swift
-// start downloading a model by its identifier
-engine.download(identifier: "Llama-3.2-1B-Instruct")
+let modelIdentifier = "Meta-Llama-3.2-1B-Instruct-float16"
 
-// you can also pause / resume / delete
-engine.pause(identifier: id)
-engine.resume(identifier: id)
-engine.delete(identifier: id)
+engine.download(identifier: modelIdentifier)
+engine.pause(identifier: modelIdentifier)
+engine.resume(identifier: modelIdentifier)
+engine.delete(identifier: modelIdentifier)
 ```
 
-### Observing download progress
-
-`UzuEngine` conforms to `@Observable` and updates the `states` dictionary in real-time.
+Observe the model's state:
 
 ```swift
 @Environment(UzuEngine.self) private var engine
 
-ProgressView(value: engine.states[id]?.progress ?? 0)
-    .tint(.accentColor)
+...
+
+ProgressView(value: engine.states[id]?.progress ?? 0.0)
 ```
 
-Possible `ModelState` cases:
+Possible model state values:
 
-* `.notDownloaded`
-* `.downloading(progress: Double)`
-* `.paused(progress: Double)`
-* `.downloaded`
-* `.error(message: String)`
+- `.notDownloaded`
+- `.downloading(progress: Double)`
+- `.paused(progress: Double)`
+- `.downloaded`
+- `.error(message: String)`
 
-### Opening a session
+### Session
 
-Sessions are inference objects created per model.
+`Session` is the core entity used to communicate with the model:
 
 ```swift
-let session = try engine.createSession(identifier: "Llama-3.2-3B-Instruct-FP16")
+let session = try engine.createSession(identifier: modelIdentifier)
 ```
 
-Next, **load** the session with a `SessionConfig` that defines a *preset*, sampling seed and desired context length.
+`Session` offers different configuration presets that can provide significant performance boosts for common use cases like classification and summarization:
 
 ```swift
 let config = SessionConfig(
-    preset: .general,               // see variants below
+    preset: .general,
     samplingSeed: .default,
     contextLength: .default
 )
 try session.load(config: config)
 ```
 
-Once loaded, the same session can be reused for many requests until you drop it.
-Each model can consume up to 4 GB of RAM, so it is important to keep only one loaded session at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to your app so it can allocate the necessary memory.
+Once loaded, the same `Session` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
 
-### Streaming inference
+### Inference
 
-`Session.run` returns progressively generated output through a *progress closure* and finally the full `SessionOutput`.
+After loading, you can run the `Session` with a specific prompt or a list of messages:"
 
 ```swift
-let final = session.run(
-    input: .text("Hello Uzu 👋"),
+let input = SessionInput.messages([
+    .init(role: .system, content: "You are a helpful assistant"),
+    .init(role: .user, content: "Tell about London")
+])
+let output = session.run(
+    input: input,
     maxTokens: 128,
     samplingMethod: .argmax
-) { partial in
-    print(partial.text)   // every new chunk
-    return true           // return false to cancel generation
+) { partialOutput in
+    // Access the current text using partialOutput.text
+    return true // Return true to continue generation
 }
-print("Finished:", final.text)
 ```
 
-### Presets in action
+`SessionOutput` also includes generation metrics such as prefill duration and tokens per second. It’s important to note that you should run a **release** build to obtain accurate metrics.
 
-`SessionPreset` lets the same model behave very differently. Below are the three presets showcased in the playground.
+### Presets
 
-#### General chat
+#### Summarization
+
+In this example, we will extract a summary of the input text:
 
 ```swift
-let chatConfig = SessionConfig(
-    preset: .general,
+let textToSummarize = "A Large Language Model (LLM) is a type of artificial intelligence that processes and generates human-like text. It is trained on vast datasets containing books, articles, and web content, allowing it to understand and predict language patterns. LLMs use deep learning, particularly transformer-based architectures, to analyze text, recognize context, and generate coherent responses. These models have a wide range of applications, including chatbots, content creation, translation, and code generation. One of the key strengths of LLMs is their ability to generate contextually relevant text based on prompts. They utilize self-attention mechanisms to weigh the importance of words within a sentence, improving accuracy and fluency. Examples of popular LLMs include OpenAI's GPT series, Google's BERT, and Meta's LLaMA. As these models grow in size and sophistication, they continue to enhance human-computer interactions, making AI-powered communication more natural and effective.";
+let text = "Text is: \"\(textToSummarize)\". Write only summary itself."
+
+let config = SessionConfig(
+    preset: .summarization,
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: chatConfig)
+try session.load(config: config)
+
+let input = SessionInput.text(text)
+let output = session.run(
+    input: input,
+    maxTokens: 1024,
+    samplingMethod: .argmax
+) { _ in
+    return true
+}
 ```
 
+This will generate 34 output tokens with only 5 model runs during the generation phase, instead of 34 runs.
+
 #### Classification
+
+Let’s look at a case where you need to classify input text based on a specific feature, such as `sentiment`:
 
 ```swift
 let feature = SessionClassificationFeature(
@@ -140,31 +159,32 @@ let feature = SessionClassificationFeature(
     values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
 )
 
-let classificationConfig = SessionConfig(
+let textToDetectFeature = "Today's been awesome! Everything just feels right, and I can't stop smiling."
+let text = "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Dont't add dot at the end."
+
+let config = SessionConfig(
     preset: .classification(feature),
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: classificationConfig)
+try session.load(config: config)
+
+let input = SessionInput.text(text)
+let output = session.run(
+    input: input,
+    maxTokens: 32,
+    samplingMethod: .argmax
+) { _ in
+    return true
+}
 ```
 
-After running `session.run(input: .text("Your text here"), maxTokens: 32, …)` the model will reply with a single label chosen from `feature.values`.
-
-#### Summarisation
-
-```swift
-let summarizationConfig = SessionConfig(
-    preset: .summarization,
-    samplingSeed: .default,
-    contextLength: .default
-)
-try session.load(config: summarizationConfig)
-```
+In this example, you will get the answer `Happy` immediately after the prefill step, and the actual generation won't even start.
 
 ## Playground
 
-The [Playground](Playground) app contains examples of `Uzu` usage in [ChatView.swift](Playground/Sources/Views/ChatView.swift), [ClassificationView.swift](Playground/Sources/Views/ClassificationView.swift), etc.
+You can find the examples described above in the [Playground](Playground) app.
 
 ## License
 
-This project is available under the MIT license. See the [LICENSE](LICENSE) file for more info.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
