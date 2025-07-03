@@ -101,7 +101,7 @@ Once loaded, the same `Session` can be reused for multiple requests until you dr
 
 ### Inference
 
-After loading, you can run the `Session` with a specific prompt or a list of messages:"
+After loading, you can run the `Session` with a specific prompt or a list of messages:
 
 ```swift
 let input = SessionInput.messages([
