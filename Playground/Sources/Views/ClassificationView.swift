@@ -102,7 +102,7 @@ struct ClassificationView: View {
                     config: SessionConfig(
                         preset: .classification(feature),
                         samplingSeed: .default,
-                        contextLength: .custom(1024)
+                        contextLength: .custom(8192)
                     )
                 )
                 await MainActor.run {

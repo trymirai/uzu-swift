@@ -84,7 +84,7 @@ struct SummarizationView: View {
                     config: SessionConfig(
                         preset: .summarization,
                         samplingSeed: .default,
-                        contextLength: .custom(1024)
+                        contextLength: .custom(8192)
                     )
                 )
                 await MainActor.run {
@@ -259,7 +259,7 @@ struct SummarizationView: View {
 
             let finalOutput = session.run(
                 input: SessionInput.text(prompt),
-                maxTokens: 128,
+                maxTokens: 1024,
                 progress: { output in
                     Task { @MainActor in
                         self.summaryText = output.text

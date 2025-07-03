@@ -147,7 +147,7 @@ struct ChatView: View {
                     config: SessionConfig(
                         preset: .general,
                         samplingSeed: .default,
-                        contextLength: .custom(1024)
+                        contextLength: .custom(8192)
                     )
                 )
                 await MainActor.run {
@@ -315,7 +315,7 @@ struct ChatView: View {
 
             let finalOutput = session.run(
                 input: input,
-                maxTokens: 128,
+                maxTokens: 1024,
                 progress: { partial in
                     if Task.isCancelled {
                         return false
