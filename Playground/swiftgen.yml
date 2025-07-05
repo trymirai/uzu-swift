@@ -1,0 +1,10 @@
+# swiftgen.yml
+
+xcassets:
+  - inputs:
+      - Resources/Assets.xcassets
+    outputs:
+      - templateName: swift5
+        params:
+          forceProvidesNamespaces: true
+        output: Sources/Generated/Assets.swift
