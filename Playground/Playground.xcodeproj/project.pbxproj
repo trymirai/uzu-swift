@@ -377,7 +377,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Playground.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = C39GZ239GY;
 				INFOPLIST_FILE = "Resources/Playground-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -404,7 +404,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/Playground.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = C39GZ239GY;
 				INFOPLIST_FILE = "Resources/Playground-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";

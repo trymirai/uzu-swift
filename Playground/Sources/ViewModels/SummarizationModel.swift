@@ -82,8 +82,11 @@ final class SummarizationModel {
 
             if Task.isCancelled {
                 Task { @MainActor [weak self] in
-                    self?.viewState = .idle
-                    self?.generationTask = nil
+                    guard let self else { return }
+                    self.summaryText = output.text
+                    self.stats = GenerationStats(output: output)
+                    self.viewState = .idle
+                    self.generationTask = nil
                 }
                 return
             }

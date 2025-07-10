@@ -89,8 +89,12 @@ final class ChatModel {
 
             if Task.isCancelled {
                 Task { @MainActor [weak self] in
-                    self?.viewState = .idle
-                    self?.generationTask = nil
+                    guard let self,
+                          let idx = self.messages.firstIndex(where: { $0.id == assistantId }) else { return }
+                    self.messages[idx].content = output.text
+                    self.messages[idx].stats = MessageStats(output: output)
+                    self.viewState = .idle
+                    self.generationTask = nil
                 }
                 return
             }

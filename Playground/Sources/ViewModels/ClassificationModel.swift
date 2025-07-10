@@ -77,8 +77,11 @@ final class ClassificationModel {
 
             if Task.isCancelled {
                 Task { @MainActor [weak self] in
-                    self?.viewState = .idle
-                    self?.generationTask = nil
+                    guard let self else { return }
+                    self.resultText = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.stats = GenerationStats(output: output)
+                    self.viewState = .idle
+                    self.generationTask = nil
                 }
                 return
             }
