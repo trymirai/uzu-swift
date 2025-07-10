@@ -1,11 +1,13 @@
-import Foundation
-import uzu_plusFFI
+#if !targetEnvironment(simulator)
+    import Foundation
+    import uzu_plusFFI
 
-// MARK: - Custom LocalizedError
+    // MARK: - Custom LocalizedError
 
-extension Uzu.Error: LocalizedError {
-    public var errorDescription: String? {
-        // Delegate to the Rust-provided helper for a human-readable message.
-        Uzu.errorUserDescription(err: self)
+    extension Uzu.Error: LocalizedError {
+        public var errorDescription: String? {
+            // Delegate to the Rust-provided helper for a human-readable message.
+            Uzu.errorUserDescription(err: self)
+        }
     }
-}
+#endif

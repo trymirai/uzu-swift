@@ -30,6 +30,7 @@ targets:
       path: Resources/Playground.entitlements
       properties:
         com.apple.developer.kernel.increased-memory-limit: true
+        com.apple.security.app-sandbox: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mirai.tech.playground
@@ -43,7 +44,7 @@ targets:
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator macosx
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 7
+        CURRENT_PROJECT_VERSION: 9
     info:
       path: Resources/Playground-Info.plist
       properties:

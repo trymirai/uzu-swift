@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
-    <img alt="Mirai" src="https://artifacts.trymirai.com/social/github/uzu-swift-header.jpg" style="max-width: 100%;">
+    <img alt="Mirai" src="https://artifacts.trymirai.com/social/github/header.jpg" style="max-width: 100%;">
   </picture>
 </p>
 
-<a href="https://artifacts.trymirai.com/social/about_us.mp3"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our podcast"></a>
-<a href="https://docsend.com/v/76bpr/mirai2025"><img src="https://img.shields.io/badge/View-Deck-red" alt="View our deck"></a>
+<a href="https://notebooklm.google.com/notebook/5851ef05-463e-4d30-bd9b-01f7668e8f8f/audio"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our podcast"></a>
+<a href="https://docsend.com/view/x87pcxrnqutb9k2q"><img src="https://img.shields.io/badge/View-Deck-red" alt="View our deck"></a>
 <a href="mailto:alexey@getmirai.co,dima@getmirai.co,aleksei@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Send-Email-green" alt="Contact us"></a>
 <a href="https://docs.trymirai.com/components/inference-engine"><img src="https://img.shields.io/badge/Read-Docs-blue" alt="Read docs"></a>
 [![Swift Version](https://img.shields.io/badge/Swift-5.9-blue)](https://swift.org)
@@ -28,7 +28,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.0")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.1")
 ]
 ```
 
@@ -40,31 +40,33 @@ import Uzu
 let engine = UzuEngine(apiKey: "API_KEY")
 ```
 
-### Model state
-
-Refresh models registry:
+### Refresh models registry:
 
 ```swift
 let registry = try await engine.updateRegistry()
 let modelIdentifiers = registry.map(\.key)
 ```
 
-Control the model's state:
+### Download with progress handle
 
 ```swift
 let modelIdentifier = "Meta-Llama-3.2-1B-Instruct-float16"
 
+let handle = try engine.downloadHandle(identifier: modelIdentifier)
+try handle.startDownload()
+
+for try await progress in handle.progress {
+    print("Progress: \(Int(progress * 100))%")
+}
+```
+
+Alternatively, you may use engine to control and observe model download:
+
+```swift
 engine.download(identifier: modelIdentifier)
 engine.pause(identifier: modelIdentifier)
 engine.resume(identifier: modelIdentifier)
 engine.delete(identifier: modelIdentifier)
-```
-
-Observe the model's state:
-
-```swift
-@Environment(UzuEngine.self) private var engine
-
 ...
 
 ProgressView(value: engine.states[id]?.progress ?? 0.0)

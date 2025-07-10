@@ -400,6 +400,22 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -538,7 +554,7 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func delete(identifier: String) 
     
-    func download(identifier: String) 
+    func download(identifier: String) throws 
     
     func getModels()  -> [Model]
     
@@ -645,7 +661,7 @@ open func delete(identifier: String)  {try! rustCall() {
 }
 }
     
-open func download(identifier: String)  {try! rustCall() {
+open func download(identifier: String)throws   {try rustCallWithError(FfiConverterTypeError_lift) {
     uniffi_uzu_plus_fn_method_engine_download(self.uniffiClonePointer(),
         FfiConverterString.lower(identifier),$0
     )
@@ -2241,6 +2257,15 @@ public enum LicenseStatus {
     case networkError
     case invalidApiKey
     case signatureMismatch
+    /**
+     * The HTTP request timed out before receiving a response.
+     */
+    case timeout
+    /**
+     * The server responded with a non-success HTTP status code (e.g. 404, 429, 500 …).
+     */
+    case httpError(code: UInt16
+    )
 }
 
 
@@ -2269,6 +2294,11 @@ public struct FfiConverterTypeLicenseStatus: FfiConverterRustBuffer {
         case 5: return .invalidApiKey
         
         case 6: return .signatureMismatch
+        
+        case 7: return .timeout
+        
+        case 8: return .httpError(code: try FfiConverterUInt16.read(from: &buf)
+        )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2301,6 +2331,15 @@ public struct FfiConverterTypeLicenseStatus: FfiConverterRustBuffer {
         case .signatureMismatch:
             writeInt(&buf, Int32(6))
         
+        
+        case .timeout:
+            writeInt(&buf, Int32(7))
+        
+        
+        case let .httpError(code):
+            writeInt(&buf, Int32(8))
+            FfiConverterUInt16.write(code, into: &buf)
+            
         }
     }
 }
@@ -2339,7 +2378,7 @@ public enum ModelState {
     case paused(progress: Double
     )
     case downloaded
-    case error(message: String
+    case error(error: Error
     )
 }
 
@@ -2368,7 +2407,7 @@ public struct FfiConverterTypeModelState: FfiConverterRustBuffer {
         
         case 4: return .downloaded
         
-        case 5: return .error(message: try FfiConverterString.read(from: &buf)
+        case 5: return .error(error: try FfiConverterTypeError.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2397,9 +2436,9 @@ public struct FfiConverterTypeModelState: FfiConverterRustBuffer {
             writeInt(&buf, Int32(4))
         
         
-        case let .error(message):
+        case let .error(error):
             writeInt(&buf, Int32(5))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterTypeError.write(error, into: &buf)
             
         }
     }
@@ -3773,7 +3812,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_engine_delete() != 9952) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_download() != 7732) {
+    if (uniffi_uzu_plus_checksum_method_engine_download() != 54585) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_getmodels() != 65529) {

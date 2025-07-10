@@ -1,14 +1,55 @@
 import Foundation
 import Observation
-import uzu_plusFFI
+
+#if !targetEnvironment(simulator)
+    import uzu_plusFFI
+#endif
 
 @MainActor
 @Observable
 public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
+    // MARK: - Properties
+    
+    public private(set) var states: [String: ModelState] = [:]
+    public private(set) var info: [String: (vendor: String, name: String, precision: String)] = [:]
+    public private(set) var licenseStatus: LicenseStatus = .notActivated
+
     private let engine: Engine
-    public var states: [String: ModelState] = [:]
-    public var info: [String: (vendor: String, name: String, precision: String)] = [:]
-    public var licenseStatus: LicenseStatus = .notActivated
+    private var downloadContinuations:
+        [String: AsyncThrowingStream<Double, Swift.Error>.Continuation] = [:]
+
+    public func downloadHandle(identifier: String) throws -> DownloadHandle {
+        let stream = AsyncThrowingStream<Double, Swift.Error> { continuation in
+            if let current = self.states[identifier] {
+                continuation.yield(current.progress)
+            }
+
+            self.downloadContinuations[identifier] = continuation
+
+            continuation.onTermination = { @Sendable _ in
+                Task { @MainActor in
+                    self.downloadContinuations.removeValue(forKey: identifier)
+                }
+            }
+        }
+
+        return DownloadHandle(
+            identifier: identifier,
+            progress: stream,
+            startImpl: { [weak self] in try self?.engine.download(identifier: identifier) },
+            pauseImpl: { [weak self] in Task { @MainActor in self?.pause(identifier: identifier) }
+            },
+            resumeImpl: { [weak self] in Task { @MainActor in self?.resume(identifier: identifier) }
+            },
+            stopImpl: { [weak self] in Task { @MainActor in self?.stop(identifier: identifier) } },
+            deleteImpl: { [weak self] in Task { @MainActor in self?.delete(identifier: identifier) }
+            }
+        )
+    }
+
+    public func download(identifier: String) {
+        try? self.engine.download(identifier: identifier)
+    }
 
     public init(apiKey: String) {
         self.engine = Engine(apiKey: apiKey)
@@ -21,10 +62,6 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
             self.states[model.identifier] = model.state
             self.info[model.identifier] = (model.vendor, model.name, model.precision)
         }
-    }
-
-    public func download(identifier: String) {
-        engine.download(identifier: identifier)
     }
 
     public func pause(identifier: String) {
@@ -74,6 +111,22 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
     nonisolated public func onState(identifier: String, state: ModelState) {
         Task { @MainActor in
             self.states[identifier] = state
+
+            if let continuation = self.downloadContinuations[identifier] {
+                switch state {
+                case .downloaded:
+                    continuation.yield(state.progress)
+                    continuation.finish()
+                    self.downloadContinuations.removeValue(forKey: identifier)
+                case .error(let err):
+                    continuation.yield(state.progress)
+                    continuation.finish(throwing: err)
+                    self.downloadContinuations.removeValue(forKey: identifier)
+                default:
+                    // Yield intermediate states (.downloading, .paused)
+                    continuation.yield(state.progress)
+                }
+            }
         }
     }
 }

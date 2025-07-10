@@ -13,8 +13,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "uzu",
-            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.0.zip",
-            checksum: "930125d8b9f38b6963ced1f46c84a78089c115fb5cfe8297d9c1a54342518eaf"
+            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.1.zip",
+            checksum: "a79c44e16a177e6312b7f6717bd082abbedc5446beccc10d43995b9aa6a7e5cc"
         ),
         .target(
             name: "Uzu",
@@ -23,6 +23,13 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("c++"),
                 .linkedFramework("SystemConfiguration"),
+            ]
+        ),
+        .testTarget(
+            name: "UzuTests",
+            dependencies: ["Uzu"],
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency")
             ]
         ),
     ]

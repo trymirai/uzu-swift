@@ -372,29 +372,3 @@ struct ModelListView: View {
         }
     }
 }
-
-// MARK: - Previews
-#Preview {
-    let engine = UzuEngine(apiKey: APIKey.miraiSDK)
-    let models = [
-        ("Llama-3.2-3B-Instruct-FP16", ModelState.downloaded),
-        ("Llama-3.2-1B-Instruct-FP16", ModelState.downloading(progress: 0.32)),
-        ("Llama-3.2-8B-Instruct-FP16", ModelState.paused(progress: 0.73)),
-        ("Alibaba-Qwen3-4B-FP16", ModelState.notDownloaded),
-    ]
-
-    for (id, st) in models {
-        engine.states[id] = st
-        let comps = id.split(separator: "-")
-        let vendor = String(comps.first ?? "")
-        let precision = String(comps.last ?? "")
-        let name = comps.dropFirst().dropLast().joined(separator: "-")
-        engine.info[id] = (vendor: vendor, name: name, precision: precision)
-    }
-
-    return NavigationStack {
-        ModelListView(mode: .choose(next: .chat))
-            .environment(engine)
-            .environment(Router())
-    }
-}
