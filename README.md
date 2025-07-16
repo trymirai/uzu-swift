@@ -112,7 +112,7 @@ let input = SessionInput.messages([
 ])
 let output = session.run(
     input: input,
-    maxTokens: 128,
+    tokensLimit: 128,
     samplingMethod: .argmax
 ) { partialOutput in
     // Access the current text using partialOutput.text
@@ -142,7 +142,7 @@ try session.load(config: config)
 let input = SessionInput.text(text)
 let output = session.run(
     input: input,
-    maxTokens: 1024,
+    tokensLimit: 1024,
     samplingMethod: .argmax
 ) { _ in
     return true
@@ -174,7 +174,7 @@ try session.load(config: config)
 let input = SessionInput.text(text)
 let output = session.run(
     input: input,
-    maxTokens: 32,
+    tokensLimit: 32,
     samplingMethod: .argmax
 ) { _ in
     return true
