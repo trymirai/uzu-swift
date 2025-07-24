@@ -28,7 +28,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.1")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.2")
 ]
 ```
 
@@ -37,7 +37,8 @@ Set up your project via [Platform](https://platform.trymirai.com), obtain an `AP
 ```swift
 import Uzu
 
-let engine = UzuEngine(apiKey: "API_KEY")
+let engine = UzuEngine()
+let licenseStatus = try await engine.activate(apiKey: "API_KEY")
 ```
 
 ### Refresh models registry:
@@ -67,7 +68,8 @@ engine.download(identifier: modelIdentifier)
 engine.pause(identifier: modelIdentifier)
 engine.resume(identifier: modelIdentifier)
 engine.delete(identifier: modelIdentifier)
-...
+
+// ...
 
 ProgressView(value: engine.states[id]?.progress ?? 0.0)
 ```
@@ -110,13 +112,19 @@ let input = SessionInput.messages([
     .init(role: .system, content: "You are a helpful assistant"),
     .init(role: .user, content: "Tell about London")
 ])
-let output = session.run(
-    input: input,
-    tokensLimit: 128,
-    samplingMethod: .argmax
-) { partialOutput in
-    // Access the current text using partialOutput.text
-    return true // Return true to continue generation
+
+do {
+    let output = try session.run(
+        input: input,
+        tokensLimit: 128,
+        samplingConfig: .argmax
+    ) { partialOutput in
+        // Access the current text using partialOutput.text
+        return true // Return true to continue generation
+    }
+} catch {
+    // Handle session errors (e.g., model not loaded, generation failure)
+    print("Session error: \(error)")
 }
 ```
 
@@ -140,12 +148,17 @@ let config = SessionConfig(
 try session.load(config: config)
 
 let input = SessionInput.text(text)
-let output = session.run(
-    input: input,
-    tokensLimit: 1024,
-    samplingMethod: .argmax
-) { _ in
-    return true
+
+do {
+    let output = try session.run(
+        input: input,
+        tokensLimit: 1024,
+        samplingConfig: .argmax
+    ) { _ in
+        return true
+    }
+} catch {
+    print("Session error: \(error)")
 }
 ```
 
@@ -172,12 +185,17 @@ let config = SessionConfig(
 try session.load(config: config)
 
 let input = SessionInput.text(text)
-let output = session.run(
-    input: input,
-    tokensLimit: 32,
-    samplingMethod: .argmax
-) { _ in
-    return true
+
+do {
+    let output = try session.run(
+        input: input,
+        tokensLimit: 32,
+        samplingConfig: .argmax
+    ) { _ in
+        return true
+    }
+} catch {
+    print("Session error: \(error)")
 }
 ```
 

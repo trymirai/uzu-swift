@@ -42,10 +42,10 @@ final class ClassificationModel {
     }
 
     // MARK: - Public API
-    @MainActor
+
     func loadSession(using engine: UzuEngine) async {
         do {
-            let session = try engine.createSession(identifier: modelId)
+            let session = try await engine.createSession(identifier: modelId)
             try session.load(config: SessionConfig(preset: .classification(feature),
                                                     samplingSeed: .default,
                                                     contextLength: .default))
@@ -71,11 +71,24 @@ final class ClassificationModel {
         generationTask?.cancel()
         generationTask = Task.detached { [weak self] in
             guard let self else { return }
-            let output = session.run(input: .text(prompt),
-                                     tokensLimit: 32,
-                                      progress: { _ in !Task.isCancelled })
+            do {
+                let output = try session.run(
+                    input: .text(prompt),
+                    tokensLimit: 32,
+                    progress: { _ in !Task.isCancelled }
+                )
 
-            if Task.isCancelled {
+                if Task.isCancelled {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.resultText = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.stats = GenerationStats(output: output)
+                        self.viewState = .idle
+                        self.generationTask = nil
+                    }
+                    return
+                }
+
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.resultText = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,15 +96,12 @@ final class ClassificationModel {
                     self.viewState = .idle
                     self.generationTask = nil
                 }
-                return
-            }
-
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.resultText = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.stats = GenerationStats(output: output)
-                self.viewState = .idle
-                self.generationTask = nil
+            } catch {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.viewState = .error(error)
+                    self.generationTask = nil
+                }
             }
         }
     }

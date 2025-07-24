@@ -8,10 +8,26 @@ import Observation
 @MainActor
 @Observable
 public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
+    // MARK: - Support Types
+
+    public struct ModelInfo {
+        public let vendor: String
+        public let name: String
+        public let precision: String
+        public let quantization: String?
+
+        init(vendor: String, name: String, precision: String, quantization: String?) {
+            self.vendor = vendor
+            self.name = name
+            self.precision = precision
+            self.quantization = quantization
+        }
+    }
+
     // MARK: - Properties
     
-    public private(set) var states: [String: ModelState] = [:]
-    public private(set) var info: [String: (vendor: String, name: String, precision: String)] = [:]
+    public private(set) var states: [String: ModelDownloadState] = [:]
+    public private(set) var info: [String: ModelInfo] = [:]
     public private(set) var licenseStatus: LicenseStatus = .notActivated
 
     private let engine: Engine
@@ -51,8 +67,8 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
         try? self.engine.download(identifier: identifier)
     }
 
-    public init(apiKey: String) {
-        self.engine = Engine(apiKey: apiKey)
+    public init() {
+        self.engine = Engine()
 
         engine.registerLicenseStatusHandler(handler: self)
         engine.registerModelStateHandler(handler: self)
@@ -60,7 +76,12 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
         let initialModels = engine.getModels()
         for model in initialModels {
             self.states[model.identifier] = model.state
-            self.info[model.identifier] = (model.vendor, model.name, model.precision)
+            self.info[model.identifier] = ModelInfo(
+                vendor: model.vendor,
+                name: model.name,
+                precision: model.precision,
+                quantization: model.quantization
+            )
         }
     }
 
@@ -85,16 +106,21 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
     }
 
     @discardableResult
-    public func updateRegistry() async throws -> [String: ModelState] {
+    public func updateRegistry() async throws -> [String: ModelDownloadState] {
         _ = try await engine.updateRegistry()
 
         let modelsSnapshot = engine.getModels()
-        var newStates: [String: ModelState] = [:]
-        var newInfo: [String: (vendor: String, name: String, precision: String)] = [:]
+        var newStates: [String: ModelDownloadState] = [:]
+        var newInfo: [String: ModelInfo] = [:]
 
         for model in modelsSnapshot {
             newStates[model.identifier] = model.state
-            newInfo[model.identifier] = (model.vendor, model.name, model.precision)
+            newInfo[model.identifier] = ModelInfo(
+                vendor: model.vendor,
+                name: model.name,
+                precision: model.precision,
+                quantization: model.quantization
+            )
         }
 
         self.states = newStates
@@ -108,7 +134,7 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
         }
     }
 
-    nonisolated public func onState(identifier: String, state: ModelState) {
+    nonisolated public func onState(identifier: String, state: ModelDownloadState) {
         Task { @MainActor in
             self.states[identifier] = state
 
@@ -128,5 +154,12 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
                 }
             }
         }
+    }
+
+    // MARK: - License activation
+
+    @discardableResult
+    public func activate(apiKey: String) async throws -> LicenseStatus {
+        try await engine.activate(apiKey: apiKey)
     }
 }

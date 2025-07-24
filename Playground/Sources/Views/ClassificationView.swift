@@ -250,7 +250,7 @@ struct ClassificationView: View {
 #Preview {
     NavigationStack {
         ClassificationView(modelId: "Llama-3.2-3B-Instruct")
-            .environment(UzuEngine(apiKey: APIKey.miraiSDK))
+            .environment(UzuEngine())
             .environment(Router())
             .environment(AudioController())
     }
