@@ -297,7 +297,7 @@ struct ChatView: View {
             viewState: ChatModel.ViewState.idle
         )
         .environment(Router())
-        .environment(UzuEngine(apiKey: APIKey.miraiSDK))
+        .environment(UzuEngine())
         .environment(AudioController())
     }
 }
@@ -327,7 +327,7 @@ struct ChatView: View {
             viewState: ChatModel.ViewState.generating
         )
         .environment(Router())
-        .environment(UzuEngine(apiKey: APIKey.miraiSDK))
+        .environment(UzuEngine())
         .environment(AudioController())
     }
 }
@@ -339,6 +339,6 @@ struct ChatView: View {
         viewState: ChatModel.ViewState.loading
     )
     .environment(Router())
-    .environment(UzuEngine(apiKey: APIKey.miraiSDK))
+    .environment(UzuEngine())
     .environment(AudioController())
 }

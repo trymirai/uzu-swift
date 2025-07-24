@@ -41,10 +41,10 @@ final class SummarizationModel {
     }
 
     // MARK: - Public API
-    @MainActor
+
     func loadSession(using engine: UzuEngine) async {
         do {
-            let session = try engine.createSession(identifier: modelId)
+            let session = try await engine.createSession(identifier: modelId)
             try session.load(config: SessionConfig(preset: .summarization,
                                                     samplingSeed: .default,
                                                     contextLength: .default))
@@ -70,17 +70,30 @@ final class SummarizationModel {
             guard let self else { return }
             let prompt = "Text is: \"\(text)\". Write only summary itself."
 
-            let output = session.run(input: .text(prompt),
-                                     tokensLimit: 1024,
-                                      progress: { partial in
-                                          if Task.isCancelled { return false }
-                                          Task { @MainActor [weak self] in
-                                              self?.summaryText = partial.text
-                                          }
-                                          return true
-                                      })
+            do {
+                let output = try session.run(
+                    input: .text(prompt),
+                    tokensLimit: 1024,
+                    progress: { partial in
+                        if Task.isCancelled { return false }
+                        Task { @MainActor [weak self] in
+                            self?.summaryText = partial.text
+                        }
+                        return true
+                    }
+                )
+                
+                if Task.isCancelled {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        self.summaryText = output.text
+                        self.stats = GenerationStats(output: output)
+                        self.viewState = .idle
+                        self.generationTask = nil
+                    }
+                    return
+                }
 
-            if Task.isCancelled {
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.summaryText = output.text
@@ -88,15 +101,12 @@ final class SummarizationModel {
                     self.viewState = .idle
                     self.generationTask = nil
                 }
-                return
-            }
-
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.summaryText = output.text
-                self.stats = GenerationStats(output: output)
-                self.viewState = .idle
-                self.generationTask = nil
+            } catch {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.viewState = .error(error)
+                    self.generationTask = nil
+                }
             }
         }
     }

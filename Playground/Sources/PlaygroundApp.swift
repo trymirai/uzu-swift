@@ -10,7 +10,7 @@ struct PlaygroundApp: App {
     @State private var audioController: AudioController
 
     init() {
-        let engine = UzuEngine(apiKey: APIKey.miraiSDK)
+        let engine = UzuEngine()
         self.engine = engine
         self.router = Router()
 
@@ -43,6 +43,8 @@ struct PlaygroundApp: App {
             .environment(audioController)
             .tint(Asset.Colors.primary.swiftUIColor)
             .task {
+                // Activate license before interacting with models.
+                let _ = try? await engine.activate(apiKey: APIKey.miraiSDK)
                 let _ = try? await engine.updateRegistry()
             }
         }

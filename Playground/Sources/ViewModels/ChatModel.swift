@@ -31,10 +31,10 @@ final class ChatModel {
     }
 
     // MARK: - Lifecycle
-    @MainActor
+
     func loadSession(using engine: UzuEngine) async {
         do {
-            let session = try engine.createSession(identifier: modelId)
+            let session = try await engine.createSession(identifier: modelId)
             try session.load(config: SessionConfig(preset: .general,
                                                    samplingSeed: .default,
                                                    contextLength: .default))
@@ -74,37 +74,46 @@ final class ChatModel {
             }
             let input = SessionInput.messages(inputMessages)
 
-            let output = session.run(
-                input: input,
-                tokensLimit: 1024,
-                progress: { partial in
-                    if Task.isCancelled { return false }
+            do {
+                let output = try session.run(
+                    input: input,
+                    tokensLimit: 1024,
+                    progress: { partial in
+                        if Task.isCancelled { return false }
+                        Task { @MainActor [weak self] in
+                            guard let self,
+                                  let idx = self.messages.firstIndex(where: { $0.id == assistantId }) else { return }
+                            self.messages[idx].content = partial.text
+                        }
+                        return true
+                    }
+                )
+
+                if Task.isCancelled {
                     Task { @MainActor [weak self] in
                         guard let self,
                               let idx = self.messages.firstIndex(where: { $0.id == assistantId }) else { return }
-                        self.messages[idx].content = partial.text
+                        self.messages[idx].content = output.text
+                        self.messages[idx].stats = MessageStats(output: output)
+                        self.viewState = .idle
+                        self.generationTask = nil
                     }
-                    return true
-                })
+                    return
+                }
 
-            if Task.isCancelled {
                 Task { @MainActor [weak self] in
                     guard let self,
                           let idx = self.messages.firstIndex(where: { $0.id == assistantId }) else { return }
                     self.messages[idx].content = output.text
                     self.messages[idx].stats = MessageStats(output: output)
                     self.viewState = .idle
+                }
+            } catch {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.viewState = .error(error)
                     self.generationTask = nil
                 }
-                return
-            }
-
-            Task { @MainActor [weak self] in
-                guard let self,
-                      let idx = self.messages.firstIndex(where: { $0.id == assistantId }) else { return }
-                self.messages[idx].content = output.text
-                self.messages[idx].stats = MessageStats(output: output)
-                self.viewState = .idle
             }
         }
     }

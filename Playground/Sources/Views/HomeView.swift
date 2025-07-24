@@ -256,7 +256,7 @@ struct HomeView: View {
 #Preview {
     NavigationStack {
         HomeView()
-            .environment(UzuEngine(apiKey: APIKey.miraiSDK))
+            .environment(UzuEngine())
             .environment(Router())
             .environment(AudioController())
     }

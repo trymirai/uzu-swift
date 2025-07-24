@@ -280,7 +280,7 @@ struct ModelListView: View {
     }
 
     // MARK: - Helpers
-    private var selectedModelState: ModelState? {
+    private var selectedModelState: ModelDownloadState? {
         guard let selectedModelId else { return nil }
         return engine.states[selectedModelId]
     }
@@ -362,7 +362,7 @@ struct ModelListView: View {
             .sorted()
     }
 
-    private func section(for state: ModelState) -> ModelSection {
+    private func section(for state: ModelDownloadState) -> ModelSection {
         switch state {
         case .downloaded: return .installed
         case .downloading: return .installing
