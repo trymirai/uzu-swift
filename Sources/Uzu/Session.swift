@@ -57,11 +57,11 @@ extension Session {
     public func run(
         input: SessionInput,
         tokensLimit: UInt32 = 128,
-        samplingMethod: SamplingConfig = .argmax,
+        samplingConfig: SamplingConfig? = nil,
         progress: @escaping ProgressClosure
-    ) -> SessionOutput {
+    ) throws -> SessionOutput {
         #if targetEnvironment(simulator)
-        SessionOutput(
+        return SessionOutput(
             text: "",
             stats: SessionOutputStats(
                 prefillStats: SessionOutputStepStats(
@@ -87,10 +87,10 @@ extension Session {
         #else
         let runConfig = SessionRunConfig(
             tokensLimit: UInt64(tokensLimit),
-            samplingMethod: samplingMethod
+            samplingConfig: samplingConfig
         )
         let callbackObject = ProgressHandlerImpl(closure: progress)
-        return self.run(
+        return try self.run(
             input: input,
             runConfig: runConfig,
             progressCallback: callbackObject
