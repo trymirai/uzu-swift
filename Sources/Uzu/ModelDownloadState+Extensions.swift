@@ -1,39 +1,24 @@
 import Foundation
 
 extension ModelDownloadState {
+    /// Fraction in range 0‒1 of the download that has completed.
     public var progress: Double {
-        switch self {
-        case .downloading(let downloaded, let total),
-             .paused(let downloaded, let total):
-            guard total > 0 else { return 0 }
-            return Double(downloaded) / Double(total)
-        case .downloaded:
-            return 1.0
-        default:
-            return 0.0
-        }
+        guard totalKbytes > 0 else { return 0 }
+        return Double(downloadedKbytes) / Double(totalKbytes)
     }
 
+    /// Bytes that have already been downloaded.
     public var downloadedBytes: UInt64 {
-        switch self {
-        case .downloading(let downloaded, _), .paused(let downloaded, _):
-            return downloaded
-        default:
-            return 0
-        }
+        UInt64(downloadedKbytes) * 1024
     }
 
+    /// Total size of the download in bytes.
     public var totalBytes: UInt64 {
-        switch self {
-        case .downloading(_, let total), .paused(_, let total), .downloaded(let total):
-            return total
-        default:
-            return 0
-        }
+        UInt64(totalKbytes) * 1024
     }
 
+    /// True iff the download is currently in progress.
     public var isDownloading: Bool {
-        if case .downloading = self { return true }
-        return false
+        phase == .downloading
     }
-} 
+}

@@ -5,7 +5,7 @@ import XCTest
 final class UzuEngineDownloadTests: XCTestCase {
     func testDownloadLlamaModel() async throws {
         let engine = UzuEngine()
-        let identifier = "Alibaba-Qwen2.5-0.5B-Instruct-float16"
+        let identifier = "Alibaba-Qwen2.5-0.5B-Instruct-bfloat16"
 
         let expectation = XCTestExpectation(description: "Model downloaded")
 
@@ -13,8 +13,10 @@ final class UzuEngineDownloadTests: XCTestCase {
             do {
                 try await engine.updateRegistry()
                 let handle = try engine.downloadHandle(identifier: identifier)
-                try handle.startDownload()
-                for try await progress in handle.progress {
+                try handle.start()
+                let stream = try handle.progress()
+                while let update = await stream.next() {
+                    let progress = update.progress
                     print("Progress: \(Int(progress * 100))%")
                     if progress >= 1.0 {
                         expectation.fulfill()

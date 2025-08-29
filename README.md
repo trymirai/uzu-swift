@@ -22,189 +22,166 @@ Swift package for [uzu](https://github.com/trymirai/uzu), a **high-performance**
 
 ## Quick Start
 
+```shell
+# Set your API key in `examples/api_key.ts`, then run the examples
+swift run example chat
+swift run example summarisation
+swift run example classification
+```
+
 ### Setup
 
 Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.2")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.5")
 ]
 ```
 
-Set up your project via [Platform](https://platform.trymirai.com), obtain an `API_KEY`, and initialize engine:
+Create and activate engine:
 
 ```swift
-import Uzu
-
 let engine = UzuEngine()
-let licenseStatus = try await engine.activate(apiKey: "API_KEY")
+let status = try await engine.activate(apiKey: apiKey)
 ```
 
-### Refresh models registry:
+### Refresh models registry
 
 ```swift
-let registry = try await engine.updateRegistry()
-let modelIdentifiers = registry.map(\.key)
+try await engine.updateRegistry()
+let localModelId = "Meta-Llama-3.2-1B-Instruct-bfloat16"
 ```
 
 ### Download with progress handle
 
 ```swift
-let modelIdentifier = "Meta-Llama-3.2-1B-Instruct-float16"
-
-let handle = try engine.downloadHandle(identifier: modelIdentifier)
-try handle.startDownload()
-
-for try await progress in handle.progress {
-    print("Progress: \(Int(progress * 100))%")
+let handle = try engine.downloadHandle(identifier: localModelId)
+try handle.start()
+let progressStream = try handle.progress()
+while let downloadProgress = await progressStream.next() {
+    handleDownloadProgress(downloadProgress)
 }
 ```
 
 Alternatively, you may use engine to control and observe model download:
 
 ```swift
-engine.download(identifier: modelIdentifier)
-engine.pause(identifier: modelIdentifier)
-engine.resume(identifier: modelIdentifier)
-engine.delete(identifier: modelIdentifier)
+// try engine.download(identifier: localModelId)
+// engine.pause(identifier: localModelId)
+// engine.resume(identifier: localModelId)
+// engine.stop(identifier: localModelId)
+// engine.delete(identifier: localModelId)
 
-// ...
-
-ProgressView(value: engine.states[id]?.progress ?? 0.0)
+let modelDownloadState = engine.downloadState(identifier: localModelId)
 ```
-
-Possible model state values:
-
-- `.notDownloaded`
-- `.downloading(progress: Double)`
-- `.paused(progress: Double)`
-- `.downloaded`
-- `.error(message: String)`
 
 ### Session
 
-`Session` is the core entity used to communicate with the model:
-
 ```swift
-let session = try engine.createSession(identifier: modelIdentifier)
+let modelId: ModelId = .local(id: localModelId)
+let session = try engine.createSession(modelId)
 ```
 
-`Session` offers different configuration presets that can provide significant performance boosts for common use cases like classification and summarization:
+### Chat
 
 ```swift
-let config = SessionConfig(
+try session.load(
     preset: .general,
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: config)
 ```
 
-Once loaded, the same `Session` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
-
-### Inference
-
-After loading, you can run the `Session` with a specific prompt or a list of messages:
-
 ```swift
-let input = SessionInput.messages([
-    .init(role: .system, content: "You are a helpful assistant"),
-    .init(role: .user, content: "Tell about London")
-])
-
-do {
-    let output = try session.run(
-        input: input,
-        tokensLimit: 128,
-        samplingConfig: .argmax
-    ) { partialOutput in
-        // Access the current text using partialOutput.text
-        return true // Return true to continue generation
-    }
-} catch {
-    // Handle session errors (e.g., model not loaded, generation failure)
-    print("Session error: \(error)")
-}
+let messages = [
+    SessionMessage(role: .system, content: "You are a helpful assistant."),
+    SessionMessage(role: .user, content: "Tell me a short, funny story about a robot."),
+]
+let input: SessionInput = .messages(messages: messages)
 ```
 
-`SessionOutput` also includes generation metrics such as prefill duration and tokens per second. It’s important to note that you should run a **release** build to obtain accurate metrics.
-
-### Presets
-
-#### Summarization
-
-In this example, we will extract a summary of the input text:
+```swift
+let tokensLimit: UInt32 = 128
+let sampling: SamplingConfig = .argmax
+```
 
 ```swift
-let textToSummarize = "A Large Language Model (LLM) is a type of artificial intelligence that processes and generates human-like text. It is trained on vast datasets containing books, articles, and web content, allowing it to understand and predict language patterns. LLMs use deep learning, particularly transformer-based architectures, to analyze text, recognize context, and generate coherent responses. These models have a wide range of applications, including chatbots, content creation, translation, and code generation. One of the key strengths of LLMs is their ability to generate contextually relevant text based on prompts. They utilize self-attention mechanisms to weigh the importance of words within a sentence, improving accuracy and fluency. Examples of popular LLMs include OpenAI's GPT series, Google's BERT, and Meta's LLaMA. As these models grow in size and sophistication, they continue to enhance human-computer interactions, making AI-powered communication more natural and effective.";
-let text = "Text is: \"\(textToSummarize)\". Write only summary itself."
+let output = try session.run(
+    input: input,
+    tokensLimit: tokensLimit,
+    samplingConfig: sampling
+) { partialOutput in handlePartialOutput(partialOutput) }
+```
 
-let config = SessionConfig(
+### Summarization
+
+```swift
+try session.load(
     preset: .summarization,
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: config)
-
-let input = SessionInput.text(text)
-
-do {
-    let output = try session.run(
-        input: input,
-        tokensLimit: 1024,
-        samplingConfig: .argmax
-    ) { _ in
-        return true
-    }
-} catch {
-    print("Session error: \(error)")
-}
 ```
 
-This will generate 34 output tokens with only 5 model runs during the generation phase, instead of 34 runs.
+```swift
+let input: SessionInput = .text(
+    text: "Text is: \"\(textToSummarize)\". Write only summary itself.")
+```
 
-#### Classification
+```swift
+let tokensLimit: UInt32 = 256
+let sampling: SamplingConfig = .argmax
+```
 
-Let’s look at a case where you need to classify input text based on a specific feature, such as `sentiment`:
+```swift
+let output = try session.run(
+    input: input,
+    tokensLimit: tokensLimit,
+    samplingConfig: sampling
+) { partialOutput in handlePartialOutput(partialOutput) }
+```
+
+### Classification
 
 ```swift
 let feature = SessionClassificationFeature(
     name: "sentiment",
     values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
 )
+```
 
-let textToDetectFeature = "Today's been awesome! Everything just feels right, and I can't stop smiling."
-let text = "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Dont't add dot at the end."
-
-let config = SessionConfig(
-    preset: .classification(feature),
+```swift
+try session.load(
+    preset: .classification(feature: feature),
     samplingSeed: .default,
     contextLength: .default
 )
-try session.load(config: config)
-
-let input = SessionInput.text(text)
-
-do {
-    let output = try session.run(
-        input: input,
-        tokensLimit: 32,
-        samplingConfig: .argmax
-    ) { _ in
-        return true
-    }
-} catch {
-    print("Session error: \(error)")
-}
 ```
 
-In this example, you will get the answer `Happy` immediately after the prefill step, and the actual generation won't even start.
+```swift
+let textToDetectFeature =
+    "Today's been awesome! Everything just feels right, and I can't stop smiling."
+let prompt =
+    "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Don't add a dot at the end."
+let input: SessionInput = .text(text: prompt)
+```
 
-## Playground
+```swift
+let tokensLimit: UInt32 = 32
+let sampling: SamplingConfig = .argmax
+```
 
-You can find the examples described above in the [Playground](Playground) app.
+```swift
+let output = try session.run(
+    input: input,
+    tokensLimit: tokensLimit,
+    samplingConfig: sampling
+) { partialOutput in handlePartialOutput(partialOutput) }
+```
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+

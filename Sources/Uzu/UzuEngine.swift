@@ -7,81 +7,33 @@ import Observation
 
 @MainActor
 @Observable
-public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
-    // MARK: - Support Types
-
-    public struct ModelInfo {
-        public let vendor: String
-        public let name: String
-        public let precision: String
-        public let quantization: String?
-
-        init(vendor: String, name: String, precision: String, quantization: String?) {
-            self.vendor = vendor
-            self.name = name
-            self.precision = precision
-            self.quantization = quantization
-        }
-    }
+public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudModelsHandler {
 
     // MARK: - Properties
-    
-    public private(set) var states: [String: ModelDownloadState] = [:]
-    public private(set) var info: [String: ModelInfo] = [:]
+
+    public private(set) var localModels: Set<LocalModel> = []
+    public private(set) var cloudModels: Set<CloudModel> = []
     public private(set) var licenseStatus: LicenseStatus = .notActivated
 
     private let engine: Engine
-    private var downloadContinuations:
-        [String: AsyncThrowingStream<Double, Swift.Error>.Continuation] = [:]
-
-    public func downloadHandle(identifier: String) throws -> DownloadHandle {
-        let stream = AsyncThrowingStream<Double, Swift.Error> { continuation in
-            if let current = self.states[identifier] {
-                continuation.yield(current.progress)
-            }
-
-            self.downloadContinuations[identifier] = continuation
-
-            continuation.onTermination = { @Sendable _ in
-                Task { @MainActor in
-                    self.downloadContinuations.removeValue(forKey: identifier)
-                }
-            }
-        }
-
-        return DownloadHandle(
-            identifier: identifier,
-            progress: stream,
-            startImpl: { [weak self] in try self?.engine.download(identifier: identifier) },
-            pauseImpl: { [weak self] in Task { @MainActor in self?.pause(identifier: identifier) }
-            },
-            resumeImpl: { [weak self] in Task { @MainActor in self?.resume(identifier: identifier) }
-            },
-            stopImpl: { [weak self] in Task { @MainActor in self?.stop(identifier: identifier) } },
-            deleteImpl: { [weak self] in Task { @MainActor in self?.delete(identifier: identifier) }
-            }
-        )
-    }
-
-    public func download(identifier: String) {
-        try? self.engine.download(identifier: identifier)
-    }
 
     public init() {
-        self.engine = Engine()
+        self.engine = Engine.make()
 
         engine.registerLicenseStatusHandler(handler: self)
         engine.registerModelStateHandler(handler: self)
+        engine.registerCloudModelsHandler(handler: self)
 
-        let initialModels = engine.getModels()
-        for model in initialModels {
-            self.states[model.identifier] = model.state
-            self.info[model.identifier] = ModelInfo(
-                vendor: model.vendor,
-                name: model.name,
-                precision: model.precision,
-                quantization: model.quantization
-            )
+        let initialModels = engine.getLocalModels()
+        self.localModels = Set(initialModels)
+    }
+
+    public func refreshCloudModels() async {
+        do {
+            let models = try await engine.fetchCloudModels()
+            self.cloudModels = Set(models)
+        } catch {
+            self.cloudModels = []
         }
     }
 
@@ -101,31 +53,24 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
         engine.delete(identifier: identifier)
     }
 
-    public func createSession(identifier: String) throws -> Session {
-        try engine.createSession(modelId: identifier)
+    public func createSession(_ modelId: ModelId) throws -> Session {
+        try engine.createSession(modelId: modelId)
+    }
+    public func downloadHandle(identifier: String) throws -> DownloadHandle {
+        return engine.downloadHandle(identifier: identifier)
+    }
+    
+    public func downloadState(identifier: String) -> ModelDownloadState? {
+        localModels.first(where: { $0.identifier == identifier })?.state
     }
 
-    @discardableResult
-    public func updateRegistry() async throws -> [String: ModelDownloadState] {
+    public func download(identifier: String) throws {
+        try self.engine.download(identifier: identifier)
+    }
+
+    public func updateRegistry() async throws {
         _ = try await engine.updateRegistry()
-
-        let modelsSnapshot = engine.getModels()
-        var newStates: [String: ModelDownloadState] = [:]
-        var newInfo: [String: ModelInfo] = [:]
-
-        for model in modelsSnapshot {
-            newStates[model.identifier] = model.state
-            newInfo[model.identifier] = ModelInfo(
-                vendor: model.vendor,
-                name: model.name,
-                precision: model.precision,
-                quantization: model.quantization
-            )
-        }
-
-        self.states = newStates
-        self.info = newInfo
-        return newStates
+        self.localModels = Set(engine.getLocalModels())
     }
 
     nonisolated public func onStatus(status: LicenseStatus) {
@@ -134,25 +79,18 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler {
         }
     }
 
-    nonisolated public func onState(identifier: String, state: ModelDownloadState) {
+    nonisolated public func onLocalModel(model: LocalModel) {
         Task { @MainActor in
-            self.states[identifier] = state
-
-            if let continuation = self.downloadContinuations[identifier] {
-                switch state {
-                case .downloaded:
-                    continuation.yield(state.progress)
-                    continuation.finish()
-                    self.downloadContinuations.removeValue(forKey: identifier)
-                case .error(let err):
-                    continuation.yield(state.progress)
-                    continuation.finish(throwing: err)
-                    self.downloadContinuations.removeValue(forKey: identifier)
-                default:
-                    // Yield intermediate states (.downloading, .paused)
-                    continuation.yield(state.progress)
-                }
+            if let existing = self.localModels.first(where: { $0.identifier == model.identifier }) {
+                self.localModels.remove(existing)
             }
+            self.localModels.insert(model)
+        }
+    }
+
+    nonisolated public func onCloudModels(models: [CloudModel]) {
+        Task { @MainActor in
+            self.cloudModels = Set(models)
         }
     }
 

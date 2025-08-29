@@ -448,6 +448,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -545,6 +561,186 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 
+public protocol DownloadHandleProtocol: AnyObject, Sendable {
+    
+    func delete() 
+    
+    func identifier()  -> String
+    
+    func pause() 
+    
+    func progress() throws  -> ProgressStream
+    
+    func resume() 
+    
+    func start() throws 
+    
+    func state()  -> ModelDownloadState
+    
+    func stop() 
+    
+}
+open class DownloadHandle: DownloadHandleProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_downloadhandle(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_downloadhandle(pointer, $0) }
+    }
+
+    
+
+    
+open func delete()  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_delete(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func identifier() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_identifier(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func pause()  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_pause(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func progress()throws  -> ProgressStream  {
+    return try  FfiConverterTypeProgressStream_lift(try rustCallWithError(FfiConverterTypeError_lift) {
+    uniffi_uzu_plus_fn_method_downloadhandle_progress(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func resume()  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_resume(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func start()throws   {try rustCallWithError(FfiConverterTypeError_lift) {
+    uniffi_uzu_plus_fn_method_downloadhandle_start(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+open func state() -> ModelDownloadState  {
+    return try!  FfiConverterTypeModelDownloadState_lift(try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_state(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+open func stop()  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_downloadhandle_stop(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDownloadHandle: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = DownloadHandle
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> DownloadHandle {
+        return DownloadHandle(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: DownloadHandle) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DownloadHandle {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: DownloadHandle, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDownloadHandle_lift(_ pointer: UnsafeMutableRawPointer) throws -> DownloadHandle {
+    return try FfiConverterTypeDownloadHandle.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDownloadHandle_lower(_ value: DownloadHandle) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeDownloadHandle.lower(value)
+}
+
+
+
+
+
+
 /**
  * Thin FFI wrapper around `ModelStorage`.
  */
@@ -552,17 +748,31 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func activate(apiKey: String) async throws  -> LicenseStatus
     
-    func createSession(modelId: String) throws  -> Session
+    func createSession(modelId: ModelId) throws  -> Session
     
     func delete(identifier: String) 
     
     func download(identifier: String) throws 
     
-    func getModels()  -> [Model]
+    /**
+     * Returns a `DownloadHandle` for the given model identifier.
+     */
+    func downloadHandle(identifier: String)  -> DownloadHandle
+    
+    func fetchCloudModels() async throws  -> [CloudModel]
+    
+    func getCloudModels() async throws  -> [CloudModel]
+    
+    func getLocalModels()  -> [LocalModel]
     
     func getState(identifier: String)  -> ModelDownloadState
     
     func pause(identifier: String) 
+    
+    /**
+     * Register a callback that will receive cloud models snapshots.
+     */
+    func registerCloudModelsHandler(handler: CloudModelsHandler) 
     
     /**
      * Register a Rust callback that will receive license status updates.
@@ -580,9 +790,7 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func stop(identifier: String) 
     
-    func stopInternal(identifier: String) 
-    
-    func updateRegistry() async throws  -> [Model]
+    func updateRegistry() async throws  -> [LocalModel]
     
 }
 /**
@@ -627,14 +835,7 @@ open class Engine: EngineProtocol, @unchecked Sendable {
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
         return try! rustCall { uniffi_uzu_plus_fn_clone_engine(self.pointer, $0) }
     }
-public convenience init() {
-    let pointer =
-        try! rustCall() {
-    uniffi_uzu_plus_fn_constructor_engine_new($0
-    )
-}
-    self.init(unsafeFromRawPointer: pointer)
-}
+    // No primary constructor declared for this class.
 
     deinit {
         guard let pointer = pointer else {
@@ -644,6 +845,13 @@ public convenience init() {
         try! rustCall { uniffi_uzu_plus_fn_free_engine(pointer, $0) }
     }
 
+    
+public static func make() -> Engine  {
+    return try!  FfiConverterTypeEngine_lift(try! rustCall() {
+    uniffi_uzu_plus_fn_constructor_engine_make($0
+    )
+})
+}
     
 
     
@@ -664,10 +872,10 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
         )
 }
     
-open func createSession(modelId: String)throws  -> Session  {
+open func createSession(modelId: ModelId)throws  -> Session  {
     return try  FfiConverterTypeSession_lift(try rustCallWithError(FfiConverterTypeError_lift) {
     uniffi_uzu_plus_fn_method_engine_createsession(self.uniffiClonePointer(),
-        FfiConverterString.lower(modelId),$0
+        FfiConverterTypeModelID_lower(modelId),$0
     )
 })
 }
@@ -686,16 +894,61 @@ open func download(identifier: String)throws   {try rustCallWithError(FfiConvert
 }
 }
     
-open func getModels() -> [Model]  {
-    return try!  FfiConverterSequenceTypeModel.lift(try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_getmodels(self.uniffiClonePointer(),$0
+    /**
+     * Returns a `DownloadHandle` for the given model identifier.
+     */
+open func downloadHandle(identifier: String) -> DownloadHandle  {
+    return try!  FfiConverterTypeDownloadHandle_lift(try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_download_handle(self.uniffiClonePointer(),
+        FfiConverterString.lower(identifier),$0
+    )
+})
+}
+    
+open func fetchCloudModels()async throws  -> [CloudModel]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_uzu_plus_fn_method_engine_fetch_cloud_models(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
+            completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
+            freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeCloudModel.lift,
+            errorHandler: FfiConverterTypeError_lift
+        )
+}
+    
+open func getCloudModels()async throws  -> [CloudModel]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_uzu_plus_fn_method_engine_get_cloud_models(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
+            completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
+            freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeCloudModel.lift,
+            errorHandler: FfiConverterTypeError_lift
+        )
+}
+    
+open func getLocalModels() -> [LocalModel]  {
+    return try!  FfiConverterSequenceTypeLocalModel.lift(try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_get_local_models(self.uniffiClonePointer(),$0
     )
 })
 }
     
 open func getState(identifier: String) -> ModelDownloadState  {
     return try!  FfiConverterTypeModelDownloadState_lift(try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_getstate(self.uniffiClonePointer(),
+    uniffi_uzu_plus_fn_method_engine_get_state(self.uniffiClonePointer(),
         FfiConverterString.lower(identifier),$0
     )
 })
@@ -709,10 +962,20 @@ open func pause(identifier: String)  {try! rustCall() {
 }
     
     /**
+     * Register a callback that will receive cloud models snapshots.
+     */
+open func registerCloudModelsHandler(handler: CloudModelsHandler)  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_register_cloud_models_handler(self.uniffiClonePointer(),
+        FfiConverterCallbackInterfaceCloudModelsHandler_lower(handler),$0
+    )
+}
+}
+    
+    /**
      * Register a Rust callback that will receive license status updates.
      */
 open func registerLicenseStatusHandler(handler: LicenseStatusHandler)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_registerlicensestatushandler(self.uniffiClonePointer(),
+    uniffi_uzu_plus_fn_method_engine_register_license_status_handler(self.uniffiClonePointer(),
         FfiConverterCallbackInterfaceLicenseStatusHandler_lower(handler),$0
     )
 }
@@ -722,7 +985,7 @@ open func registerLicenseStatusHandler(handler: LicenseStatusHandler)  {try! rus
      * Register a callback that will receive model state updates.
      */
 open func registerModelStateHandler(handler: ModelStateHandler)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_registermodelstatehandler(self.uniffiClonePointer(),
+    uniffi_uzu_plus_fn_method_engine_register_model_state_handler(self.uniffiClonePointer(),
         FfiConverterCallbackInterfaceModelStateHandler_lower(handler),$0
     )
 }
@@ -750,18 +1013,11 @@ open func stop(identifier: String)  {try! rustCall() {
 }
 }
     
-open func stopInternal(identifier: String)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_stop_internal(self.uniffiClonePointer(),
-        FfiConverterString.lower(identifier),$0
-    )
-}
-}
-    
-open func updateRegistry()async throws  -> [Model]  {
+open func updateRegistry()async throws  -> [LocalModel]  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_updateregistry(
+                uniffi_uzu_plus_fn_method_engine_update_registry(
                     self.uniffiClonePointer()
                     
                 )
@@ -769,7 +1025,7 @@ open func updateRegistry()async throws  -> [Model]  {
             pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
             completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
             freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeModel.lift,
+            liftFunc: FfiConverterSequenceTypeLocalModel.lift,
             errorHandler: FfiConverterTypeError_lift
         )
 }
@@ -832,17 +1088,143 @@ public func FfiConverterTypeEngine_lower(_ value: Engine) -> UnsafeMutableRawPoi
 
 
 
+public protocol ProgressStreamProtocol: AnyObject, Sendable {
+    
+    func next() async  -> ProgressUpdate?
+    
+}
+open class ProgressStream: ProgressStreamProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_progressstream(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_progressstream(pointer, $0) }
+    }
+
+    
+
+    
+open func next()async  -> ProgressUpdate?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_uzu_plus_fn_method_progressstream_next(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
+            completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
+            freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeProgressUpdate.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProgressStream: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = ProgressStream
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> ProgressStream {
+        return ProgressStream(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: ProgressStream) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProgressStream {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: ProgressStream, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProgressStream_lift(_ pointer: UnsafeMutableRawPointer) throws -> ProgressStream {
+    return try FfiConverterTypeProgressStream.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProgressStream_lower(_ value: ProgressStream) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeProgressStream.lower(value)
+}
+
+
+
+
+
+
 public protocol SessionProtocol: AnyObject, Sendable {
     
-    /**
-     * Loads the model configuration. Must be called before `run`.
-     */
     func load(config: SessionConfig) throws 
     
-    /**
-     * Runs the session with the provided input and run-time configuration.
-     * Progress updates are forwarded to the supplied callback interface.
-     */
     func run(input: SessionInput, runConfig: SessionRunConfig, progressCallback: SessionProgressHandler) throws  -> SessionOutput
     
 }
@@ -885,15 +1267,7 @@ open class Session: SessionProtocol, @unchecked Sendable {
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
         return try! rustCall { uniffi_uzu_plus_fn_clone_session(self.pointer, $0) }
     }
-public convenience init(modelDir: String)throws  {
-    let pointer =
-        try rustCallWithError(FfiConverterTypeSessionError_lift) {
-    uniffi_uzu_plus_fn_constructor_session_new(
-        FfiConverterString.lower(modelDir),$0
-    )
-}
-    self.init(unsafeFromRawPointer: pointer)
-}
+    // No primary constructor declared for this class.
 
     deinit {
         guard let pointer = pointer else {
@@ -906,9 +1280,6 @@ public convenience init(modelDir: String)throws  {
     
 
     
-    /**
-     * Loads the model configuration. Must be called before `run`.
-     */
 open func load(config: SessionConfig)throws   {try rustCallWithError(FfiConverterTypeSessionError_lift) {
     uniffi_uzu_plus_fn_method_session_load(self.uniffiClonePointer(),
         FfiConverterTypeSessionConfig_lower(config),$0
@@ -916,10 +1287,6 @@ open func load(config: SessionConfig)throws   {try rustCallWithError(FfiConverte
 }
 }
     
-    /**
-     * Runs the session with the provided input and run-time configuration.
-     * Progress updates are forwarded to the supplied callback interface.
-     */
 open func run(input: SessionInput, runConfig: SessionRunConfig, progressCallback: SessionProgressHandler)throws  -> SessionOutput  {
     return try  FfiConverterTypeSessionOutput_lift(try rustCallWithError(FfiConverterTypeSessionError_lift) {
     uniffi_uzu_plus_fn_method_session_run(self.uniffiClonePointer(),
@@ -984,6 +1351,84 @@ public func FfiConverterTypeSession_lower(_ value: Session) -> UnsafeMutableRawP
 }
 
 
+
+
+public struct CloudModel {
+    public var repoId: String
+    public var name: String
+    public var vendor: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(repoId: String, name: String, vendor: String) {
+        self.repoId = repoId
+        self.name = name
+        self.vendor = vendor
+    }
+}
+
+#if compiler(>=6)
+extension CloudModel: Sendable {}
+#endif
+
+
+extension CloudModel: Equatable, Hashable {
+    public static func ==(lhs: CloudModel, rhs: CloudModel) -> Bool {
+        if lhs.repoId != rhs.repoId {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.vendor != rhs.vendor {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(repoId)
+        hasher.combine(name)
+        hasher.combine(vendor)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCloudModel: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CloudModel {
+        return
+            try CloudModel(
+                repoId: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                vendor: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CloudModel, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.repoId, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.vendor, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCloudModel_lift(_ buf: RustBuffer) throws -> CloudModel {
+    return try FfiConverterTypeCloudModel.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCloudModel_lower(_ value: CloudModel) -> RustBuffer {
+    return FfiConverterTypeCloudModel.lower(value)
+}
 
 
 public struct DecoderTestResult {
@@ -1088,7 +1533,7 @@ public func FfiConverterTypeDecoderTestResult_lower(_ value: DecoderTestResult) 
 }
 
 
-public struct Model {
+public struct LocalModel {
     /**
      * Unique identifier of the model in the form `<vendor>-<name>-<precision>`.
      */
@@ -1145,12 +1590,12 @@ public struct Model {
 }
 
 #if compiler(>=6)
-extension Model: Sendable {}
+extension LocalModel: Sendable {}
 #endif
 
 
-extension Model: Equatable, Hashable {
-    public static func ==(lhs: Model, rhs: Model) -> Bool {
+extension LocalModel: Equatable, Hashable {
+    public static func ==(lhs: LocalModel, rhs: LocalModel) -> Bool {
         if lhs.identifier != rhs.identifier {
             return false
         }
@@ -1187,10 +1632,10 @@ extension Model: Equatable, Hashable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeModel: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Model {
+public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalModel {
         return
-            try Model(
+            try LocalModel(
                 identifier: FfiConverterString.read(from: &buf), 
                 vendor: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
@@ -1200,7 +1645,7 @@ public struct FfiConverterTypeModel: FfiConverterRustBuffer {
         )
     }
 
-    public static func write(_ value: Model, into buf: inout [UInt8]) {
+    public static func write(_ value: LocalModel, into buf: inout [UInt8]) {
         FfiConverterString.write(value.identifier, into: &buf)
         FfiConverterString.write(value.vendor, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
@@ -1214,15 +1659,221 @@ public struct FfiConverterTypeModel: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModel_lift(_ buf: RustBuffer) throws -> Model {
-    return try FfiConverterTypeModel.lift(buf)
+public func FfiConverterTypeLocalModel_lift(_ buf: RustBuffer) throws -> LocalModel {
+    return try FfiConverterTypeLocalModel.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModel_lower(_ value: Model) -> RustBuffer {
-    return FfiConverterTypeModel.lower(value)
+public func FfiConverterTypeLocalModel_lower(_ value: LocalModel) -> RustBuffer {
+    return FfiConverterTypeLocalModel.lower(value)
+}
+
+
+public struct ModelDownloadState {
+    /**
+     * Total size of all model files in kilobytes.
+     */
+    public var totalKbytes: UInt32
+    /**
+     * Bytes already downloaded (meaningful in Downloading / Paused).
+     */
+    public var downloadedKbytes: UInt32
+    /**
+     * Current phase of the download.
+     */
+    public var phase: Phase
+    /**
+     * Stringified error when `phase == Phase::Error`.
+     */
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Total size of all model files in kilobytes.
+         */totalKbytes: UInt32, 
+        /**
+         * Bytes already downloaded (meaningful in Downloading / Paused).
+         */downloadedKbytes: UInt32, 
+        /**
+         * Current phase of the download.
+         */phase: Phase, 
+        /**
+         * Stringified error when `phase == Phase::Error`.
+         */error: String?) {
+        self.totalKbytes = totalKbytes
+        self.downloadedKbytes = downloadedKbytes
+        self.phase = phase
+        self.error = error
+    }
+}
+
+#if compiler(>=6)
+extension ModelDownloadState: Sendable {}
+#endif
+
+
+extension ModelDownloadState: Equatable, Hashable {
+    public static func ==(lhs: ModelDownloadState, rhs: ModelDownloadState) -> Bool {
+        if lhs.totalKbytes != rhs.totalKbytes {
+            return false
+        }
+        if lhs.downloadedKbytes != rhs.downloadedKbytes {
+            return false
+        }
+        if lhs.phase != rhs.phase {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalKbytes)
+        hasher.combine(downloadedKbytes)
+        hasher.combine(phase)
+        hasher.combine(error)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelDownloadState: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelDownloadState {
+        return
+            try ModelDownloadState(
+                totalKbytes: FfiConverterUInt32.read(from: &buf), 
+                downloadedKbytes: FfiConverterUInt32.read(from: &buf), 
+                phase: FfiConverterTypePhase.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ModelDownloadState, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.totalKbytes, into: &buf)
+        FfiConverterUInt32.write(value.downloadedKbytes, into: &buf)
+        FfiConverterTypePhase.write(value.phase, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelDownloadState_lift(_ buf: RustBuffer) throws -> ModelDownloadState {
+    return try FfiConverterTypeModelDownloadState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelDownloadState_lower(_ value: ModelDownloadState) -> RustBuffer {
+    return FfiConverterTypeModelDownloadState.lower(value)
+}
+
+
+public struct ProgressUpdate {
+    /**
+     * Bytes downloaded so far.
+     */
+    public var completedBytes: Double
+    /**
+     * Total bytes expected for the download; `None` while unknown.
+     */
+    public var totalBytes: Double?
+    /**
+     * Normalised progress between 0.0 and 1.0.
+     */
+    public var progress: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Bytes downloaded so far.
+         */completedBytes: Double, 
+        /**
+         * Total bytes expected for the download; `None` while unknown.
+         */totalBytes: Double?, 
+        /**
+         * Normalised progress between 0.0 and 1.0.
+         */progress: Double) {
+        self.completedBytes = completedBytes
+        self.totalBytes = totalBytes
+        self.progress = progress
+    }
+}
+
+#if compiler(>=6)
+extension ProgressUpdate: Sendable {}
+#endif
+
+
+extension ProgressUpdate: Equatable, Hashable {
+    public static func ==(lhs: ProgressUpdate, rhs: ProgressUpdate) -> Bool {
+        if lhs.completedBytes != rhs.completedBytes {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.progress != rhs.progress {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(completedBytes)
+        hasher.combine(totalBytes)
+        hasher.combine(progress)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProgressUpdate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProgressUpdate {
+        return
+            try ProgressUpdate(
+                completedBytes: FfiConverterDouble.read(from: &buf), 
+                totalBytes: FfiConverterOptionDouble.read(from: &buf), 
+                progress: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProgressUpdate, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.completedBytes, into: &buf)
+        FfiConverterOptionDouble.write(value.totalBytes, into: &buf)
+        FfiConverterDouble.write(value.progress, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProgressUpdate_lift(_ buf: RustBuffer) throws -> ProgressUpdate {
+    return try FfiConverterTypeProgressUpdate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProgressUpdate_lower(_ value: ProgressUpdate) -> RustBuffer {
+    return FfiConverterTypeProgressUpdate.lower(value)
 }
 
 
@@ -1851,12 +2502,12 @@ public func FfiConverterTypeSessionOutputTotalStats_lower(_ value: SessionOutput
 
 
 public struct SessionRunConfig {
-    public var tokensLimit: UInt64
+    public var tokensLimit: Int64
     public var samplingConfig: SamplingConfig?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(tokensLimit: UInt64, samplingConfig: SamplingConfig?) {
+    public init(tokensLimit: Int64, samplingConfig: SamplingConfig?) {
         self.tokensLimit = tokensLimit
         self.samplingConfig = samplingConfig
     }
@@ -1893,13 +2544,13 @@ public struct FfiConverterTypeSessionRunConfig: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionRunConfig {
         return
             try SessionRunConfig(
-                tokensLimit: FfiConverterUInt64.read(from: &buf), 
+                tokensLimit: FfiConverterInt64.read(from: &buf), 
                 samplingConfig: FfiConverterOptionTypeSamplingConfig.read(from: &buf)
         )
     }
 
     public static func write(_ value: SessionRunConfig, into buf: inout [UInt8]) {
-        FfiConverterUInt64.write(value.tokensLimit, into: &buf)
+        FfiConverterInt64.write(value.tokensLimit, into: &buf)
         FfiConverterOptionTypeSamplingConfig.write(value.samplingConfig, into: &buf)
     }
 }
@@ -1925,7 +2576,7 @@ public func FfiConverterTypeSessionRunConfig_lower(_ value: SessionRunConfig) ->
 public enum ContextLength {
     
     case `default`
-    case custom(UInt64
+    case custom(length: Int64
     )
 }
 
@@ -1946,7 +2597,7 @@ public struct FfiConverterTypeContextLength: FfiConverterRustBuffer {
         
         case 1: return .`default`
         
-        case 2: return .custom(try FfiConverterUInt64.read(from: &buf)
+        case 2: return .custom(length: try FfiConverterInt64.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -1961,9 +2612,9 @@ public struct FfiConverterTypeContextLength: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .custom(v1):
+        case let .custom(length):
             writeInt(&buf, Int32(2))
-            FfiConverterUInt64.write(v1, into: &buf)
+            FfiConverterInt64.write(length, into: &buf)
             
         }
     }
@@ -2196,11 +2847,15 @@ public enum Error: Swift.Error {
 
     
     
+    case General(message: String
+    )
     case Storage(StorageError
     )
     case Downloader(DownloaderError
     )
     case Session(SessionError
+    )
+    case Network(NetworkError
     )
 }
 
@@ -2218,14 +2873,20 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
         
 
         
-        case 1: return .Storage(
+        case 1: return .General(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 2: return .Storage(
             try FfiConverterTypeStorageError.read(from: &buf)
             )
-        case 2: return .Downloader(
+        case 3: return .Downloader(
             try FfiConverterTypeDownloaderError.read(from: &buf)
             )
-        case 3: return .Session(
+        case 4: return .Session(
             try FfiConverterTypeSessionError.read(from: &buf)
+            )
+        case 5: return .Network(
+            try FfiConverterTypeNetworkError.read(from: &buf)
             )
 
          default: throw UniffiInternalError.unexpectedEnumCase
@@ -2239,19 +2900,29 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
 
         
         
-        case let .Storage(v1):
+        case let .General(message):
             writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Storage(v1):
+            writeInt(&buf, Int32(2))
             FfiConverterTypeStorageError.write(v1, into: &buf)
             
         
         case let .Downloader(v1):
-            writeInt(&buf, Int32(2))
+            writeInt(&buf, Int32(3))
             FfiConverterTypeDownloaderError.write(v1, into: &buf)
             
         
         case let .Session(v1):
-            writeInt(&buf, Int32(3))
+            writeInt(&buf, Int32(4))
             FfiConverterTypeSessionError.write(v1, into: &buf)
+            
+        
+        case let .Network(v1):
+            writeInt(&buf, Int32(5))
+            FfiConverterTypeNetworkError.write(v1, into: &buf)
             
         }
     }
@@ -2284,6 +2955,7 @@ extension Error: Equatable, Hashable {}
 public enum LicenseStatus {
     
     case notActivated
+    case paymentRequired
     case gracePeriodActive
     case activated
     case networkError
@@ -2317,19 +2989,21 @@ public struct FfiConverterTypeLicenseStatus: FfiConverterRustBuffer {
         
         case 1: return .notActivated
         
-        case 2: return .gracePeriodActive
+        case 2: return .paymentRequired
         
-        case 3: return .activated
+        case 3: return .gracePeriodActive
         
-        case 4: return .networkError
+        case 4: return .activated
         
-        case 5: return .invalidApiKey
+        case 5: return .networkError
         
-        case 6: return .signatureMismatch
+        case 6: return .invalidApiKey
         
-        case 7: return .timeout
+        case 7: return .signatureMismatch
         
-        case 8: return .httpError(code: try FfiConverterUInt16.read(from: &buf)
+        case 8: return .timeout
+        
+        case 9: return .httpError(code: try FfiConverterUInt16.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2344,32 +3018,36 @@ public struct FfiConverterTypeLicenseStatus: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case .gracePeriodActive:
+        case .paymentRequired:
             writeInt(&buf, Int32(2))
         
         
-        case .activated:
+        case .gracePeriodActive:
             writeInt(&buf, Int32(3))
         
         
-        case .networkError:
+        case .activated:
             writeInt(&buf, Int32(4))
         
         
-        case .invalidApiKey:
+        case .networkError:
             writeInt(&buf, Int32(5))
         
         
-        case .signatureMismatch:
+        case .invalidApiKey:
             writeInt(&buf, Int32(6))
         
         
-        case .timeout:
+        case .signatureMismatch:
             writeInt(&buf, Int32(7))
         
         
-        case let .httpError(code):
+        case .timeout:
             writeInt(&buf, Int32(8))
+        
+        
+        case let .httpError(code):
+            writeInt(&buf, Int32(9))
             FfiConverterUInt16.write(code, into: &buf)
             
         }
@@ -2398,87 +3076,52 @@ extension LicenseStatus: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
- * High-level model download state exposed to Swift.
- */
 
-public enum ModelDownloadState {
+public enum ModelId {
     
-    case notDownloaded(totalBytes: UInt64
+    case local(id: String
     )
-    case downloading(downloadedBytes: UInt64, totalBytes: UInt64
-    )
-    case paused(downloadedBytes: UInt64, totalBytes: UInt64
-    )
-    case downloaded(totalBytes: UInt64
-    )
-    case error(error: Error
+    case cloud(id: String
     )
 }
 
 
 #if compiler(>=6)
-extension ModelDownloadState: Sendable {}
+extension ModelId: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeModelDownloadState: FfiConverterRustBuffer {
-    typealias SwiftType = ModelDownloadState
+public struct FfiConverterTypeModelID: FfiConverterRustBuffer {
+    typealias SwiftType = ModelId
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelDownloadState {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelId {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .notDownloaded(totalBytes: try FfiConverterUInt64.read(from: &buf)
+        case 1: return .local(id: try FfiConverterString.read(from: &buf)
         )
         
-        case 2: return .downloading(downloadedBytes: try FfiConverterUInt64.read(from: &buf), totalBytes: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 3: return .paused(downloadedBytes: try FfiConverterUInt64.read(from: &buf), totalBytes: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 4: return .downloaded(totalBytes: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 5: return .error(error: try FfiConverterTypeError.read(from: &buf)
+        case 2: return .cloud(id: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
-    public static func write(_ value: ModelDownloadState, into buf: inout [UInt8]) {
+    public static func write(_ value: ModelId, into buf: inout [UInt8]) {
         switch value {
         
         
-        case let .notDownloaded(totalBytes):
+        case let .local(id):
             writeInt(&buf, Int32(1))
-            FfiConverterUInt64.write(totalBytes, into: &buf)
+            FfiConverterString.write(id, into: &buf)
             
         
-        case let .downloading(downloadedBytes,totalBytes):
+        case let .cloud(id):
             writeInt(&buf, Int32(2))
-            FfiConverterUInt64.write(downloadedBytes, into: &buf)
-            FfiConverterUInt64.write(totalBytes, into: &buf)
-            
-        
-        case let .paused(downloadedBytes,totalBytes):
-            writeInt(&buf, Int32(3))
-            FfiConverterUInt64.write(downloadedBytes, into: &buf)
-            FfiConverterUInt64.write(totalBytes, into: &buf)
-            
-        
-        case let .downloaded(totalBytes):
-            writeInt(&buf, Int32(4))
-            FfiConverterUInt64.write(totalBytes, into: &buf)
-            
-        
-        case let .error(error):
-            writeInt(&buf, Int32(5))
-            FfiConverterTypeError.write(error, into: &buf)
+            FfiConverterString.write(id, into: &buf)
             
         }
     }
@@ -2488,19 +3131,210 @@ public struct FfiConverterTypeModelDownloadState: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModelDownloadState_lift(_ buf: RustBuffer) throws -> ModelDownloadState {
-    return try FfiConverterTypeModelDownloadState.lift(buf)
+public func FfiConverterTypeModelID_lift(_ buf: RustBuffer) throws -> ModelId {
+    return try FfiConverterTypeModelID.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModelDownloadState_lower(_ value: ModelDownloadState) -> RustBuffer {
-    return FfiConverterTypeModelDownloadState.lower(value)
+public func FfiConverterTypeModelID_lower(_ value: ModelId) -> RustBuffer {
+    return FfiConverterTypeModelID.lower(value)
 }
 
 
-extension ModelDownloadState: Equatable, Hashable {}
+extension ModelId: Equatable, Hashable {}
+
+
+
+
+public enum NetworkError: Swift.Error {
+
+    
+    
+    case Request(message: String
+    )
+    case HttpStatus(status: UInt16
+    )
+    case Parse(message: String
+    )
+    case Join(message: String
+    )
+    case Timeout
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNetworkError: FfiConverterRustBuffer {
+    typealias SwiftType = NetworkError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NetworkError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Request(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 2: return .HttpStatus(
+            status: try FfiConverterUInt16.read(from: &buf)
+            )
+        case 3: return .Parse(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 4: return .Join(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 5: return .Timeout
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NetworkError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case let .Request(message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .HttpStatus(status):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt16.write(status, into: &buf)
+            
+        
+        case let .Parse(message):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Join(message):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case .Timeout:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNetworkError_lift(_ buf: RustBuffer) throws -> NetworkError {
+    return try FfiConverterTypeNetworkError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNetworkError_lower(_ value: NetworkError) -> RustBuffer {
+    return FfiConverterTypeNetworkError.lower(value)
+}
+
+
+extension NetworkError: Equatable, Hashable {}
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum Phase {
+    
+    case notDownloaded
+    case downloading
+    case paused
+    case downloaded
+    case error
+}
+
+
+#if compiler(>=6)
+extension Phase: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePhase: FfiConverterRustBuffer {
+    typealias SwiftType = Phase
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Phase {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .notDownloaded
+        
+        case 2: return .downloading
+        
+        case 3: return .paused
+        
+        case 4: return .downloaded
+        
+        case 5: return .error
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: Phase, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .notDownloaded:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .downloading:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .paused:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .downloaded:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .error:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePhase_lift(_ buf: RustBuffer) throws -> Phase {
+    return try FfiConverterTypePhase.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePhase_lower(_ value: Phase) -> RustBuffer {
+    return FfiConverterTypePhase.lower(value)
+}
+
+
+extension Phase: Equatable, Hashable {}
 
 
 
@@ -2510,9 +3344,9 @@ extension ModelDownloadState: Equatable, Hashable {}
 public enum SamplingConfig {
     
     case argmax
-    case topP(topP: Float
+    case topP(topP: Double
     )
-    case categorical(temperature: Float
+    case categorical(temperature: Double
     )
 }
 
@@ -2533,10 +3367,10 @@ public struct FfiConverterTypeSamplingConfig: FfiConverterRustBuffer {
         
         case 1: return .argmax
         
-        case 2: return .topP(topP: try FfiConverterFloat.read(from: &buf)
+        case 2: return .topP(topP: try FfiConverterDouble.read(from: &buf)
         )
         
-        case 3: return .categorical(temperature: try FfiConverterFloat.read(from: &buf)
+        case 3: return .categorical(temperature: try FfiConverterDouble.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2553,12 +3387,12 @@ public struct FfiConverterTypeSamplingConfig: FfiConverterRustBuffer {
         
         case let .topP(topP):
             writeInt(&buf, Int32(2))
-            FfiConverterFloat.write(topP, into: &buf)
+            FfiConverterDouble.write(topP, into: &buf)
             
         
         case let .categorical(temperature):
             writeInt(&buf, Int32(3))
-            FfiConverterFloat.write(temperature, into: &buf)
+            FfiConverterDouble.write(temperature, into: &buf)
             
         }
     }
@@ -2590,7 +3424,7 @@ extension SamplingConfig: Equatable, Hashable {}
 public enum SamplingSeed {
     
     case `default`
-    case custom(UInt64
+    case custom(seed: Int64
     )
 }
 
@@ -2611,7 +3445,7 @@ public struct FfiConverterTypeSamplingSeed: FfiConverterRustBuffer {
         
         case 1: return .`default`
         
-        case 2: return .custom(try FfiConverterUInt64.read(from: &buf)
+        case 2: return .custom(seed: try FfiConverterInt64.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2626,9 +3460,9 @@ public struct FfiConverterTypeSamplingSeed: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .custom(v1):
+        case let .custom(seed):
             writeInt(&buf, Int32(2))
-            FfiConverterUInt64.write(v1, into: &buf)
+            FfiConverterInt64.write(seed, into: &buf)
             
         }
     }
@@ -2666,6 +3500,10 @@ public enum SessionError: Swift.Error {
     case UnableToLoadTokenizer
     case UnsupportedModel
     case GeneratorNotLoaded
+    case NetworkError(message: String
+    )
+    case HttpError(code: UInt16, message: String
+    )
 }
 
 
@@ -2689,6 +3527,13 @@ public struct FfiConverterTypeSessionError: FfiConverterRustBuffer {
         case 5: return .UnableToLoadTokenizer
         case 6: return .UnsupportedModel
         case 7: return .GeneratorNotLoaded
+        case 8: return .NetworkError(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 9: return .HttpError(
+            code: try FfiConverterUInt16.read(from: &buf), 
+            message: try FfiConverterString.read(from: &buf)
+            )
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2728,6 +3573,17 @@ public struct FfiConverterTypeSessionError: FfiConverterRustBuffer {
         case .GeneratorNotLoaded:
             writeInt(&buf, Int32(7))
         
+        
+        case let .NetworkError(message):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .HttpError(code,message):
+            writeInt(&buf, Int32(9))
+            FfiConverterUInt16.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            
         }
     }
 }
@@ -2758,9 +3614,9 @@ extension SessionError: Equatable, Hashable {}
 
 public enum SessionInput {
     
-    case text(String
+    case text(text: String
     )
-    case messages([SessionMessage]
+    case messages(messages: [SessionMessage]
     )
 }
 
@@ -2779,10 +3635,10 @@ public struct FfiConverterTypeSessionInput: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .text(try FfiConverterString.read(from: &buf)
+        case 1: return .text(text: try FfiConverterString.read(from: &buf)
         )
         
-        case 2: return .messages(try FfiConverterSequenceTypeSessionMessage.read(from: &buf)
+        case 2: return .messages(messages: try FfiConverterSequenceTypeSessionMessage.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2793,14 +3649,14 @@ public struct FfiConverterTypeSessionInput: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .text(v1):
+        case let .text(text):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(v1, into: &buf)
+            FfiConverterString.write(text, into: &buf)
             
         
-        case let .messages(v1):
+        case let .messages(messages):
             writeInt(&buf, Int32(2))
-            FfiConverterSequenceTypeSessionMessage.write(v1, into: &buf)
+            FfiConverterSequenceTypeSessionMessage.write(messages, into: &buf)
             
         }
     }
@@ -2980,7 +3836,7 @@ extension SessionOutputFinishReason: Equatable, Hashable {}
 public enum SessionPreset {
     
     case general
-    case classification(SessionClassificationFeature
+    case classification(feature: SessionClassificationFeature
     )
     case summarization
 }
@@ -3002,7 +3858,7 @@ public struct FfiConverterTypeSessionPreset: FfiConverterRustBuffer {
         
         case 1: return .general
         
-        case 2: return .classification(try FfiConverterTypeSessionClassificationFeature.read(from: &buf)
+        case 2: return .classification(feature: try FfiConverterTypeSessionClassificationFeature.read(from: &buf)
         )
         
         case 3: return .summarization
@@ -3019,9 +3875,9 @@ public struct FfiConverterTypeSessionPreset: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .classification(v1):
+        case let .classification(feature):
             writeInt(&buf, Int32(2))
-            FfiConverterTypeSessionClassificationFeature.write(v1, into: &buf)
+            FfiConverterTypeSessionClassificationFeature.write(feature, into: &buf)
             
         
         case .summarization:
@@ -3154,11 +4010,11 @@ extension StorageError: Equatable, Hashable {}
 
 
 /**
- * Callback interface Swift implements to react to license status changes.
+ * Callback interface to push cloud models snapshots to the host.
  */
-public protocol LicenseStatusHandler: AnyObject, Sendable {
+public protocol CloudModelsHandler: AnyObject, Sendable {
     
-    func onStatus(status: LicenseStatus) 
+    func onCloudModels(models: [CloudModel]) 
     
 }
 // Magic number for the Rust proxy to call using the same mechanism as every other method,
@@ -3168,6 +4024,125 @@ private let IDX_CALLBACK_FREE: Int32 = 0
 private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
 private let UNIFFI_CALLBACK_ERROR: Int32 = 1
 private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceCloudModelsHandler {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfaceCloudModelsHandler] = [UniffiVTableCallbackInterfaceCloudModelsHandler(
+        onCloudModels: { (
+            uniffiHandle: UInt64,
+            models: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceCloudModelsHandler.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onCloudModels(
+                     models: try FfiConverterSequenceTypeCloudModel.lift(models)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceCloudModelsHandler.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface CloudModelsHandler: handle missing in uniffiFree")
+            }
+        }
+    )]
+}
+
+private func uniffiCallbackInitCloudModelsHandler() {
+    uniffi_uzu_plus_fn_init_callback_vtable_cloudmodelshandler(UniffiCallbackInterfaceCloudModelsHandler.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceCloudModelsHandler {
+    fileprivate static let handleMap = UniffiHandleMap<CloudModelsHandler>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceCloudModelsHandler : FfiConverter {
+    typealias SwiftType = CloudModelsHandler
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceCloudModelsHandler_lift(_ handle: UInt64) throws -> CloudModelsHandler {
+    return try FfiConverterCallbackInterfaceCloudModelsHandler.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceCloudModelsHandler_lower(_ v: CloudModelsHandler) -> UInt64 {
+    return FfiConverterCallbackInterfaceCloudModelsHandler.lower(v)
+}
+
+
+
+
+/**
+ * Callback interface Swift implements to react to license status changes.
+ */
+public protocol LicenseStatusHandler: AnyObject, Sendable {
+    
+    func onStatus(status: LicenseStatus) 
+    
+}
+
 
 // Put the implementation in a struct so we don't pollute the top-level namespace
 fileprivate struct UniffiCallbackInterfaceLicenseStatusHandler {
@@ -3283,7 +4258,7 @@ public func FfiConverterCallbackInterfaceLicenseStatusHandler_lower(_ v: License
  */
 public protocol ModelStateHandler: AnyObject, Sendable {
     
-    func onState(identifier: String, state: ModelDownloadState) 
+    func onLocalModel(model: LocalModel) 
     
 }
 
@@ -3297,10 +4272,9 @@ fileprivate struct UniffiCallbackInterfaceModelStateHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceModelStateHandler] = [UniffiVTableCallbackInterfaceModelStateHandler(
-        onState: { (
+        onLocalModel: { (
             uniffiHandle: UInt64,
-            identifier: RustBuffer,
-            state: RustBuffer,
+            model: RustBuffer,
             uniffiOutReturn: UnsafeMutableRawPointer,
             uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
         ) in
@@ -3309,9 +4283,8 @@ fileprivate struct UniffiCallbackInterfaceModelStateHandler {
                 guard let uniffiObj = try? FfiConverterCallbackInterfaceModelStateHandler.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return uniffiObj.onState(
-                     identifier: try FfiConverterString.lift(identifier),
-                     state: try FfiConverterTypeModelDownloadState_lift(state)
+                return uniffiObj.onLocalModel(
+                     model: try FfiConverterTypeLocalModel_lift(model)
                 )
             }
 
@@ -3539,6 +4512,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -3555,6 +4552,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeProgressUpdate: FfiConverterRustBuffer {
+    typealias SwiftType = ProgressUpdate?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeProgressUpdate.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeProgressUpdate.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3684,23 +4705,48 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeModel: FfiConverterRustBuffer {
-    typealias SwiftType = [Model]
+fileprivate struct FfiConverterSequenceTypeCloudModel: FfiConverterRustBuffer {
+    typealias SwiftType = [CloudModel]
 
-    public static func write(_ value: [Model], into buf: inout [UInt8]) {
+    public static func write(_ value: [CloudModel], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeModel.write(item, into: &buf)
+            FfiConverterTypeCloudModel.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Model] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CloudModel] {
         let len: Int32 = try readInt(&buf)
-        var seq = [Model]()
+        var seq = [CloudModel]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeModel.read(from: &buf))
+            seq.append(try FfiConverterTypeCloudModel.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalModel: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalModel]
+
+    public static func write(_ value: [LocalModel], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalModel.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalModel] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalModel]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalModel.read(from: &buf))
         }
         return seq
     }
@@ -3820,40 +4866,10 @@ fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: In
         print("uniffiFutureContinuationCallback invalid handle")
     }
 }
-/**
- * Synchronous wrapper around the async activation for Swift/Obj-C callers.
- */
-public func activate(apiKey: String)  {try! rustCall() {
-    uniffi_uzu_plus_fn_func_activate(
-        FfiConverterString.lower(apiKey),$0
-    )
-}
-}
 public func errorUserDescription(err: Error) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_uzu_plus_fn_func_error_user_description(
         FfiConverterTypeError_lower(err),$0
-    )
-})
-}
-public func runDecoder(modelDir: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_uzu_plus_fn_func_run_decoder(
-        FfiConverterString.lower(modelDir),$0
-    )
-})
-}
-public func runDecoderWithPlacementLog(modelDir: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_uzu_plus_fn_func_run_decoder_with_placement_log(
-        FfiConverterString.lower(modelDir),$0
-    )
-})
-}
-public func runDecoderWithResults(modelDir: String) -> DecoderTestResult  {
-    return try!  FfiConverterTypeDecoderTestResult_lift(try! rustCall() {
-    uniffi_uzu_plus_fn_func_run_decoder_with_results(
-        FfiConverterString.lower(modelDir),$0
     )
 })
 }
@@ -3873,25 +4889,37 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_uzu_plus_checksum_func_activate() != 37256) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_uzu_plus_checksum_func_error_user_description() != 44999) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_func_run_decoder() != 59795) {
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_delete() != 51416) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_func_run_decoder_with_placement_log() != 36170) {
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_identifier() != 16295) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_func_run_decoder_with_results() != 1653) {
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_pause() != 51221) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_progress() != 16996) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_resume() != 55435) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_start() != 43311) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_state() != 55138) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_downloadhandle_stop() != 43852) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_activate() != 42537) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_createsession() != 53834) {
+    if (uniffi_uzu_plus_checksum_method_engine_createsession() != 54333) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_delete() != 9952) {
@@ -3900,58 +4928,71 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_engine_download() != 54585) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_getmodels() != 65529) {
+    if (uniffi_uzu_plus_checksum_method_engine_download_handle() != 61463) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_getstate() != 49731) {
+    if (uniffi_uzu_plus_checksum_method_engine_fetch_cloud_models() != 486) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_get_cloud_models() != 42003) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_get_local_models() != 11177) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_get_state() != 21567) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_pause() != 33697) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_registerlicensestatushandler() != 59511) {
+    if (uniffi_uzu_plus_checksum_method_engine_register_cloud_models_handler() != 7831) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_registermodelstatehandler() != 59291) {
+    if (uniffi_uzu_plus_checksum_method_engine_register_license_status_handler() != 12399) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_register_model_state_handler() != 6455) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_resume() != 4316) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_set_state() != 57030) {
+    if (uniffi_uzu_plus_checksum_method_engine_set_state() != 16953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_stop() != 10696) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_stop_internal() != 28417) {
+    if (uniffi_uzu_plus_checksum_method_engine_update_registry() != 774) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_updateregistry() != 20444) {
+    if (uniffi_uzu_plus_checksum_method_progressstream_next() != 52954) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_session_load() != 9426) {
+    if (uniffi_uzu_plus_checksum_method_session_load() != 18824) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_session_run() != 37918) {
+    if (uniffi_uzu_plus_checksum_method_session_run() != 31680) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_constructor_engine_new() != 29479) {
+    if (uniffi_uzu_plus_checksum_constructor_engine_make() != 13877) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_constructor_session_new() != 44797) {
+    if (uniffi_uzu_plus_checksum_method_cloudmodelshandler_on_cloud_models() != 52474) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_licensestatushandler_on_status() != 36495) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_modelstatehandler_on_state() != 28912) {
+    if (uniffi_uzu_plus_checksum_method_modelstatehandler_on_local_model() != 56178) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_sessionprogresshandler_on_progress() != 37147) {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitCloudModelsHandler()
     uniffiCallbackInitLicenseStatusHandler()
     uniffiCallbackInitModelStateHandler()
     uniffiCallbackInitSessionProgressHandler()

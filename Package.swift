@@ -12,10 +12,14 @@ let package = Package(
     ],
     targets: [
         .binaryTarget(
+
             name: "uzu",
-            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.2.zip",
-            checksum: "c79567976f24ebe5ec18ba0a818fc70249737744b633793d1285fe8a455cb165"
-        ),
+
+            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.5.zip",
+
+            checksum: "94bb076cd8ca0aacc892cd8be10b5c399461224a32f0f3bdfb28ea2ca6bde25d"
+
+            ),
         .target(
             name: "Uzu",
             dependencies: ["uzu"],
