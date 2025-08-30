@@ -9,17 +9,22 @@ let package = Package(
     ],
     products: [
         .library(name: "Uzu", targets: ["Uzu"])
+        .executableTarget(
+        name: "Example",
+        dependencies: [
+            "Uzu",
+            .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            .executable(name: "example", targets: ["Example"]),
+        ],
+        path: "Sources/Example"
+    ) ,
     ],
     targets: [
         .binaryTarget(
-
             name: "uzu",
-
-            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.5.zip",
-
-            checksum: "94bb076cd8ca0aacc892cd8be10b5c399461224a32f0f3bdfb28ea2ca6bde25d"
-
-            ),
+            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.6.zip",
+            checksum: "191fc9d3e917c39948eeab9b52b4aea1afcbb06657adb635b69bc22c7b07cfea"
+        ),
         .target(
             name: "Uzu",
             dependencies: ["uzu"],

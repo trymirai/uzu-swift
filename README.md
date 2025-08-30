@@ -20,10 +20,10 @@ Swift package for [uzu](https://github.com/trymirai/uzu), a **high-performance**
 - [Broad model support](https://trymirai.com/models)
 - Observable model manager
 
-## Quick Start
+## Examples
 
 ```shell
-# Set your API key in `examples/api_key.ts`, then run the examples
+# Set your API key in `Sources/Example/Common.swift`, then run the examples
 swift run example chat
 swift run example summarisation
 swift run example classification
@@ -35,7 +35,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.5")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.6")
 ]
 ```
 
@@ -78,10 +78,14 @@ let modelDownloadState = engine.downloadState(identifier: localModelId)
 
 ### Session
 
+`Session` is the core entity used to communicate with the model:
+
 ```swift
 let modelId: ModelId = .local(id: localModelId)
 let session = try engine.createSession(modelId)
 ```
+
+Once loaded, the same `Session` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
 
 ### Chat
 
@@ -92,6 +96,8 @@ try session.load(
     contextLength: .default
 )
 ```
+
+After loading, you can run the `Session` with a specific prompt or a list of messages:
 
 ```swift
 let messages = [
@@ -114,7 +120,11 @@ let output = try session.run(
 ) { partialOutput in handlePartialOutput(partialOutput) }
 ```
 
+`SessionOutput` also includes generation metrics such as prefill duration and tokens per second. It’s important to note that you should run a **release** build to obtain accurate metrics.
+
 ### Summarization
+
+In this example, we will extract a summary of the input text:
 
 ```swift
 try session.load(
@@ -142,7 +152,11 @@ let output = try session.run(
 ) { partialOutput in handlePartialOutput(partialOutput) }
 ```
 
+This will generate 34 output tokens with only 5 model runs during the generation phase, instead of 34 runs.
+
 ### Classification
+
+Let’s look at a case where you need to classify input text based on a specific feature, such as `sentiment`:
 
 ```swift
 let feature = SessionClassificationFeature(
@@ -179,6 +193,8 @@ let output = try session.run(
     samplingConfig: sampling
 ) { partialOutput in handlePartialOutput(partialOutput) }
 ```
+
+In this example, you will get the answer `Happy` immediately after the prefill step, and the actual generation won't even start.
 
 ## License
 
