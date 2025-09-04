@@ -35,7 +35,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.11")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.12")
 ]
 ```
 
@@ -43,7 +43,7 @@ Create and activate engine:
 
 ```swift
 let engine = UzuEngine()
-let status = try await engine.activate(apiKey: apiKey)
+let status = try await engine.activate(apiKey: resolvedApiKey)
 ```
 
 ### Refresh models registry

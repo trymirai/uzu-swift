@@ -6,7 +6,7 @@ import Uzu
     // snippet:activation
 
     let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: apiKey)
+    let status = try await engine.activate(apiKey: resolvedApiKey)
 
     // endsnippet:activation
 

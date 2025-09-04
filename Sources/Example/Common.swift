@@ -3,6 +3,7 @@ import Uzu
 
 /// Visit https://platform.trymirai.com/ to get your API key.
 let apiKey = "MIRAI_API_KEY"
+let resolvedApiKey = ProcessInfo.processInfo.environment["MIRAI_API_KEY"] ?? apiKey
 
 public enum Error: Swift.Error {
     case licenseNotActive(LicenseStatus)

@@ -3,7 +3,7 @@ import Uzu
 
 @MainActor public func runSummarisation() async throws {
     let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: apiKey)
+    let status = try await engine.activate(apiKey: resolvedApiKey)
 
     guard status == .activated || status == .gracePeriodActive
     else { throw Error.licenseNotActive(status) }
