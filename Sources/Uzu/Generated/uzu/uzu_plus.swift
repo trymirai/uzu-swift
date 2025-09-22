@@ -1555,6 +1555,10 @@ public struct LocalModel {
      */
     public var quantization: String?
     /**
+     * Optional regex to parse model output provided by the backend.
+     */
+    public var outputParserRegex: String?
+    /**
      * Current download/installation state.
      */
     public var state: ModelDownloadState
@@ -1578,6 +1582,9 @@ public struct LocalModel {
          * Quantization type if the model is quantized (e.g. "uint4").
          */quantization: String?, 
         /**
+         * Optional regex to parse model output provided by the backend.
+         */outputParserRegex: String?, 
+        /**
          * Current download/installation state.
          */state: ModelDownloadState) {
         self.identifier = identifier
@@ -1585,6 +1592,7 @@ public struct LocalModel {
         self.name = name
         self.precision = precision
         self.quantization = quantization
+        self.outputParserRegex = outputParserRegex
         self.state = state
     }
 }
@@ -1611,6 +1619,9 @@ extension LocalModel: Equatable, Hashable {
         if lhs.quantization != rhs.quantization {
             return false
         }
+        if lhs.outputParserRegex != rhs.outputParserRegex {
+            return false
+        }
         if lhs.state != rhs.state {
             return false
         }
@@ -1623,6 +1634,7 @@ extension LocalModel: Equatable, Hashable {
         hasher.combine(name)
         hasher.combine(precision)
         hasher.combine(quantization)
+        hasher.combine(outputParserRegex)
         hasher.combine(state)
     }
 }
@@ -1641,6 +1653,7 @@ public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
                 name: FfiConverterString.read(from: &buf), 
                 precision: FfiConverterString.read(from: &buf), 
                 quantization: FfiConverterOptionString.read(from: &buf), 
+                outputParserRegex: FfiConverterOptionString.read(from: &buf), 
                 state: FfiConverterTypeModelDownloadState.read(from: &buf)
         )
     }
@@ -1651,6 +1664,7 @@ public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.precision, into: &buf)
         FfiConverterOptionString.write(value.quantization, into: &buf)
+        FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
         FfiConverterTypeModelDownloadState.write(value.state, into: &buf)
     }
 }
