@@ -5,7 +5,7 @@ import XCTest
 final class UzuEngineDownloadTests: XCTestCase {
     func testDownloadLlamaModel() async throws {
         let engine = UzuEngine()
-        let identifier = "Alibaba-Qwen2.5-0.5B-Instruct-bfloat16"
+        let identifier = "Alibaba-Qwen3-0.6B"
 
         let expectation = XCTestExpectation(description: "Model downloaded")
 

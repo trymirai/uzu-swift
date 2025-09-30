@@ -10,7 +10,9 @@ struct Example: AsyncParsableCommand {
         version: "1.0.0"
     )
 
-    @Argument(help: "Mode: chat | summarisation | classification", transform: { $0.lowercased() })
+    @Argument(
+        help: "Mode: chat | summarisation | classification | quick-start",
+        transform: { $0.lowercased() })
     var mode: String = "chat"
 
     mutating func run() async throws {
@@ -21,6 +23,8 @@ struct Example: AsyncParsableCommand {
             try await runSummarisation()
         case "classification":
             try await runClassification()
+        case "quick-start":
+            try await runQuickStart()
         default:
             throw ValidationError("Unknown mode: \(mode)")
         }

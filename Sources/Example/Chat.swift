@@ -4,82 +4,69 @@ import Uzu
 @MainActor public func runChat() async throws {
 
     // snippet:activation
-
     let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: resolvedApiKey)
-
+    let status = try await engine.activate(apiKey: API_KEY)
     // endsnippet:activation
 
     guard status == .activated || status == .gracePeriodActive
     else { throw Error.licenseNotActive(status) }
 
     // snippet:registry
-
     try await engine.updateRegistry()
-    let localModelId = "Meta-Llama-3.2-1B-Instruct-bfloat16"
-
+    let _ = engine.localModels
+    let localModelId = "Meta-Llama-3.2-1B-Instruct"
     // endsnippet:registry
 
-    // snippet:model-state
+    // snippet:storage-methods
+    let modelDownloadState = engine.downloadState(identifier: localModelId)
 
     // try engine.download(identifier: localModelId)
     // engine.pause(identifier: localModelId)
     // engine.resume(identifier: localModelId)
     // engine.stop(identifier: localModelId)
     // engine.delete(identifier: localModelId)
-
-    let modelDownloadState = engine.downloadState(identifier: localModelId)
-
-    // endsnippet:model-state
+    // endsnippet:storage-methods
 
     let handleDownloadProgress = makeDownloadProgressHandler()
-
     if modelDownloadState?.phase != .downloaded {
-        // snippet:download
+        // snippet:download-handle
         let handle = try engine.downloadHandle(identifier: localModelId)
         try handle.start()
         let progressStream = try handle.progress()
         while let downloadProgress = await progressStream.next() {
+            // Implement a custom download progress handler
             handleDownloadProgress(downloadProgress)
         }
-        // endsnippet:download
+        // endsnippet:download-handle
     }
 
-    // snippet:session-create
+    // snippet:session-create-general
     let modelId: ModelId = .local(id: localModelId)
-    let session = try engine.createSession(modelId)
-    // endsnippet:session-create
+    let session = try engine.createSession(modelId, config: Config(preset: .general))
+    // endsnippet:session-create-general
 
-    // snippet:session-load
-    try session.load(
-        preset: .general,
-        samplingSeed: .default,
-        contextLength: .default
-    )
-    // endsnippet:session-load
-
-    // snippet:session-input
+    // snippet:session-input-general
     let messages = [
-        SessionMessage(role: .system, content: "You are a helpful assistant."),
-        SessionMessage(role: .user, content: "Tell me a short, funny story about a robot."),
+        Message(role: .system, content: "You are a helpful assistant."),
+        Message(role: .user, content: "Tell me a short, funny story about a robot."),
     ]
-    let input: SessionInput = .messages(messages: messages)
-    // endsnippet:session-input
-
-    // snippet:session-run-config
-    let tokensLimit: UInt32 = 128
-    let sampling: SamplingConfig = .argmax
-    // endsnippet:session-run-config
+    let input: Input = .messages(messages: messages)
+    // endsnippet:session-input-general
 
     let handlePartialOutput = makePartialOutputHandler()
 
-    // snippet:session-run
+    // snippet:session-run-general
+    let runConfig = RunConfig()
+        .tokensLimit(128)
+
     let output = try session.run(
         input: input,
-        tokensLimit: tokensLimit,
-        samplingConfig: sampling
-    ) { partialOutput in handlePartialOutput(partialOutput) }
-    // endsnippet:session-run
+        config: runConfig
+    ) { partialOutput in
+        // Implement a custom partial output handler
+        handlePartialOutput(partialOutput)
+    }
+    // endsnippet:session-run-general
 
     print("\n--- End of Generation ---")
     print("Final Stats:", output.stats)

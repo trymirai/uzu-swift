@@ -4,7 +4,7 @@
 
     // MARK: - Custom LocalizedError
 
-    extension Uzu.Error: LocalizedError {
+    extension Uzu.EngineError: LocalizedError {
         public var errorDescription: String? {
             // Delegate to the Rust-provided helper for a human-readable message.
             Uzu.errorUserDescription(err: self)

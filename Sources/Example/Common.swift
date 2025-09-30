@@ -3,7 +3,7 @@ import Uzu
 
 /// Visit https://platform.trymirai.com/ to get your API key.
 let apiKey = "MIRAI_API_KEY"
-let resolvedApiKey = ProcessInfo.processInfo.environment["MIRAI_API_KEY"] ?? apiKey
+let API_KEY = ProcessInfo.processInfo.environment["MIRAI_API_KEY"] ?? apiKey
 
 public enum Error: Swift.Error {
     case licenseNotActive(LicenseStatus)
@@ -17,8 +17,8 @@ public final class PartialOutputHandler {
 
     public init() {}
 
-    public func handle(_ partial: SessionOutput) -> Bool {
-        let text = partial.text
+    public func handle(_ partial: Output) -> Bool {
+        let text = partial.text.original
         if printedChars < text.count {
             let start = text.index(text.startIndex, offsetBy: printedChars)
             let newChunk = text[start...]
@@ -32,7 +32,7 @@ public final class PartialOutputHandler {
 }
 
 @MainActor
-public func makePartialOutputHandler() -> (SessionOutput) -> Bool {
+public func makePartialOutputHandler() -> (Output) -> Bool {
     let handler = PartialOutputHandler()
     return { partial in handler.handle(partial) }
 }

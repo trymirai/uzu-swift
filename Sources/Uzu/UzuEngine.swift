@@ -53,13 +53,14 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudMode
         engine.delete(identifier: identifier)
     }
 
-    public func createSession(_ modelId: ModelId) throws -> Session {
-        try engine.createSession(modelId: modelId)
+    public func createSession(_ modelId: ModelId, config: Config) throws -> Session {
+        try engine.createSession(modelId: modelId, config: config)
     }
+    
     public func downloadHandle(identifier: String) throws -> DownloadHandle {
         return engine.downloadHandle(identifier: identifier)
     }
-    
+
     public func downloadState(identifier: String) -> ModelDownloadState? {
         localModels.first(where: { $0.identifier == identifier })?.state
     }
