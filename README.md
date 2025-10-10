@@ -35,7 +35,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.21")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.22")
 ]
 ```
 
@@ -46,36 +46,27 @@ let engine = UzuEngine()
 let status = try await engine.activate(apiKey: API_KEY)
 ```
 
-### Refresh models registry
+### Choose model
 
 ```swift
-try await engine.updateRegistry()
-let _ = engine.localModels
-let localModelId = "Meta-Llama-3.2-1B-Instruct"
+let localModels = engine.localModels
+let localModelId = "Alibaba-Qwen3-0.6B"
 ```
 
 ### Download with progress handle
 
 ```swift
-let handle = try engine.downloadHandle(identifier: localModelId)
-try handle.start()
-let progressStream = try handle.progress()
-while let downloadProgress = await progressStream.next() {
-    // Implement a custom download progress handler
-    handleDownloadProgress(downloadProgress)
-}
-```
-
-Alternatively, you may use engine to control and observe model download:
-
-```swift
 let modelDownloadState = engine.downloadState(identifier: localModelId)
+let handleDownloadProgress = makeDownloadProgressHandler()
 
-// try engine.download(identifier: localModelId)
-// engine.pause(identifier: localModelId)
-// engine.resume(identifier: localModelId)
-// engine.stop(identifier: localModelId)
-// engine.delete(identifier: localModelId)
+if modelDownloadState?.phase != .downloaded {
+    let handle = engine.downloadHandle(identifier: localModelId)
+    try await handle.download()
+    let progressStream = handle.progress()
+    while let downloadProgress = await progressStream.next() {
+        handleDownloadProgress(downloadProgress)
+    }
+}
 ```
 
 ### Session

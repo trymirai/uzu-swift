@@ -11,18 +11,14 @@ final class UzuEngineDownloadTests: XCTestCase {
 
         Task {
             do {
-                try await engine.updateRegistry()
-                let handle = try engine.downloadHandle(identifier: identifier)
-                try handle.start()
-                let stream = try handle.progress()
+                let handle = engine.downloadHandle(identifier: identifier)
+                try await handle.download()
+                let stream = handle.progress()
                 while let update = await stream.next() {
                     let progress = update.progress
                     print("Progress: \(Int(progress * 100))%")
-                    if progress >= 1.0 {
-                        expectation.fulfill()
-                        return
-                    }
                 }
+                expectation.fulfill()
             } catch {
                 XCTFail("Download failed with error: \(error.localizedDescription)")
             }

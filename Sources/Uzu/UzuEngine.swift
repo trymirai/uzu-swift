@@ -37,41 +37,16 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudMode
         }
     }
 
-    public func pause(identifier: String) {
-        engine.pause(identifier: identifier)
-    }
-
-    public func resume(identifier: String) {
-        engine.resume(identifier: identifier)
-    }
-
-    public func stop(identifier: String) {
-        engine.stop(identifier: identifier)
-    }
-
-    public func delete(identifier: String) {
-        engine.delete(identifier: identifier)
-    }
-
     public func createSession(_ modelId: ModelId, config: Config) throws -> Session {
         try engine.createSession(modelId: modelId, config: config)
     }
     
-    public func downloadHandle(identifier: String) throws -> DownloadHandle {
-        return engine.downloadHandle(identifier: identifier)
+    public func downloadHandle(identifier: String) -> ModelDownloadHandle {
+        engine.downloadHandle(identifier: identifier)
     }
 
     public func downloadState(identifier: String) -> ModelDownloadState? {
         localModels.first(where: { $0.identifier == identifier })?.state
-    }
-
-    public func download(identifier: String) throws {
-        try self.engine.download(identifier: identifier)
-    }
-
-    public func updateRegistry() async throws {
-        _ = try await engine.updateRegistry()
-        self.localModels = Set(engine.getLocalModels())
     }
 
     nonisolated public func onStatus(status: LicenseStatus) {
@@ -100,5 +75,19 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudMode
     @discardableResult
     public func activate(apiKey: String) async throws -> LicenseStatus {
         try await engine.activate(apiKey: apiKey)
+    }
+
+    // MARK: - Model management convenience
+
+    public func downloadModel(identifier: String) async throws {
+        try await self.engine.downloadModel(identifier: identifier)
+    }
+
+    public func deleteModel(identifier: String) async throws {
+        try await self.engine.deleteModel(identifier: identifier)
+    }
+
+    public func pauseModel(identifier: String) async throws {
+        try await self.engine.pauseModel(identifier: identifier)
     }
 }

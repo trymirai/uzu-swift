@@ -9,15 +9,15 @@ import Uzu
     }
 
     //update models list
-    try await engine.updateRegistry()
-    let localModelId = "Meta-Llama-3.2-1B-Instruct"
+    let localModelIds = engine.localModels.map(\.identifier)
+    let localModelId = "Alibaba-Qwen3-0.6B"
 
     //download model
     let modelDownloadState = engine.downloadState(identifier: localModelId)
     if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(identifier: localModelId)
-        try handle.start()
-        let progressStream = try handle.progress()
+        let handle = engine.downloadHandle(identifier: localModelId)
+        try await handle.download()
+        let progressStream = handle.progress()
         while let downloadProgress = await progressStream.next() {
             print("Progress: \(downloadProgress.progress)")
         }

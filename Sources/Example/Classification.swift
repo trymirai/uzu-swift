@@ -8,15 +8,14 @@ import Uzu
     guard status == .activated || status == .gracePeriodActive
     else { throw Error.licenseNotActive(status) }
 
-    try await engine.updateRegistry()
-    let localModelId = "Meta-Llama-3.2-1B-Instruct"
+    let localModelId = "Alibaba-Qwen3-0.6B"
 
     let modelDownloadState = engine.downloadState(identifier: localModelId)
     let handleDownloadProgress = makeDownloadProgressHandler()
     if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(identifier: localModelId)
-        try handle.start()
-        let progressStream = try handle.progress()
+        let handle = engine.downloadHandle(identifier: localModelId)
+        try await handle.download()
+        let progressStream = handle.progress()
         while let upd = await progressStream.next() {
             handleDownloadProgress(upd)
         }

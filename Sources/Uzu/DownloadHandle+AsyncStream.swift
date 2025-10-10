@@ -1,9 +1,10 @@
 import Foundation
+import uzu_plusFFI
 
-public extension DownloadHandle {
+public extension ModelDownloadHandle {
     /// Convenience: expose download progress as an AsyncThrowingStream of Double (0.0...1.0).
-    func progressStream() throws -> AsyncThrowingStream<Double, Swift.Error> {
-        let progressStream = try self.progress()
+    func progressStream() -> AsyncThrowingStream<Double, Swift.Error> {
+        let progressStream = self.progress()
         return AsyncThrowingStream<Double, Swift.Error> { continuation in
             let task = Task {
                 while !Task.isCancelled {

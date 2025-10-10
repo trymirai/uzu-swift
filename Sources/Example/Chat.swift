@@ -3,42 +3,32 @@ import Uzu
 
 @MainActor public func runChat() async throws {
 
-    // snippet:activation
+    // snippet:engine-create
     let engine = UzuEngine()
     let status = try await engine.activate(apiKey: API_KEY)
-    // endsnippet:activation
+    // endsnippet:engine-create
 
     guard status == .activated || status == .gracePeriodActive
     else { throw Error.licenseNotActive(status) }
 
-    // snippet:registry
-    try await engine.updateRegistry()
-    let _ = engine.localModels
-    let localModelId = "Meta-Llama-3.2-1B-Instruct"
-    // endsnippet:registry
+    // snippet:model-choose
+    let localModels = engine.localModels
+    let localModelId = "Alibaba-Qwen3-0.6B"
+    // endsnippet:model-choose
 
-    // snippet:storage-methods
+    // snippet:model-download
     let modelDownloadState = engine.downloadState(identifier: localModelId)
-
-    // try engine.download(identifier: localModelId)
-    // engine.pause(identifier: localModelId)
-    // engine.resume(identifier: localModelId)
-    // engine.stop(identifier: localModelId)
-    // engine.delete(identifier: localModelId)
-    // endsnippet:storage-methods
-
     let handleDownloadProgress = makeDownloadProgressHandler()
+
     if modelDownloadState?.phase != .downloaded {
-        // snippet:download-handle
-        let handle = try engine.downloadHandle(identifier: localModelId)
-        try handle.start()
-        let progressStream = try handle.progress()
+        let handle = engine.downloadHandle(identifier: localModelId)
+        try await handle.download()
+        let progressStream = handle.progress()
         while let downloadProgress = await progressStream.next() {
-            // Implement a custom download progress handler
             handleDownloadProgress(downloadProgress)
         }
-        // endsnippet:download-handle
     }
+    // endsnippet:model-download
 
     // snippet:session-create-general
     let modelId: ModelId = .local(id: localModelId)
