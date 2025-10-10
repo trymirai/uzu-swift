@@ -1413,13 +1413,15 @@ public struct CloudModel {
     public var repoId: String
     public var name: String
     public var vendor: String
+    public var outputParserRegex: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(repoId: String, name: String, vendor: String) {
+    public init(repoId: String, name: String, vendor: String, outputParserRegex: String?) {
         self.repoId = repoId
         self.name = name
         self.vendor = vendor
+        self.outputParserRegex = outputParserRegex
     }
 }
 
@@ -1439,6 +1441,9 @@ extension CloudModel: Equatable, Hashable {
         if lhs.vendor != rhs.vendor {
             return false
         }
+        if lhs.outputParserRegex != rhs.outputParserRegex {
+            return false
+        }
         return true
     }
 
@@ -1446,6 +1451,7 @@ extension CloudModel: Equatable, Hashable {
         hasher.combine(repoId)
         hasher.combine(name)
         hasher.combine(vendor)
+        hasher.combine(outputParserRegex)
     }
 }
 
@@ -1460,7 +1466,8 @@ public struct FfiConverterTypeCloudModel: FfiConverterRustBuffer {
             try CloudModel(
                 repoId: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
-                vendor: FfiConverterString.read(from: &buf)
+                vendor: FfiConverterString.read(from: &buf), 
+                outputParserRegex: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -1468,6 +1475,7 @@ public struct FfiConverterTypeCloudModel: FfiConverterRustBuffer {
         FfiConverterString.write(value.repoId, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.vendor, into: &buf)
+        FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
     }
 }
 
