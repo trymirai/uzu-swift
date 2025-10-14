@@ -575,18 +575,21 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     /**
      * Register a callback that will receive cloud models snapshots.
+     * Pass None to unregister the handler.
      */
-    func registerCloudModelsHandler(handler: CloudModelsHandler) 
+    func registerCloudModelsHandler(handler: CloudModelsHandler?) 
     
     /**
      * Register a Rust callback that will receive license status updates.
+     * Pass None to unregister the handler.
      */
-    func registerLicenseStatusHandler(handler: LicenseStatusHandler) 
+    func registerLicenseStatusHandler(handler: LicenseStatusHandler?) 
     
     /**
      * Register a callback that will receive model state updates.
+     * Pass None to unregister the handler.
      */
-    func registerModelStateHandler(handler: ModelStateHandler) 
+    func registerModelStateHandler(handler: ModelStateHandler?) 
     
 }
 /**
@@ -790,30 +793,33 @@ open func pauseModel(identifier: String)async throws   {
     
     /**
      * Register a callback that will receive cloud models snapshots.
+     * Pass None to unregister the handler.
      */
-open func registerCloudModelsHandler(handler: CloudModelsHandler)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_register_cloud_models_handler(self.uniffiClonePointer(),
-        FfiConverterCallbackInterfaceCloudModelsHandler_lower(handler),$0
+open func registerCloudModelsHandler(handler: CloudModelsHandler?)  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_registercloudmodelshandler(self.uniffiClonePointer(),
+        FfiConverterOptionCallbackInterfaceCloudModelsHandler.lower(handler),$0
     )
 }
 }
     
     /**
      * Register a Rust callback that will receive license status updates.
+     * Pass None to unregister the handler.
      */
-open func registerLicenseStatusHandler(handler: LicenseStatusHandler)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_register_license_status_handler(self.uniffiClonePointer(),
-        FfiConverterCallbackInterfaceLicenseStatusHandler_lower(handler),$0
+open func registerLicenseStatusHandler(handler: LicenseStatusHandler?)  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_registerlicensestatushandler(self.uniffiClonePointer(),
+        FfiConverterOptionCallbackInterfaceLicenseStatusHandler.lower(handler),$0
     )
 }
 }
     
     /**
      * Register a callback that will receive model state updates.
+     * Pass None to unregister the handler.
      */
-open func registerModelStateHandler(handler: ModelStateHandler)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_register_model_state_handler(self.uniffiClonePointer(),
-        FfiConverterCallbackInterfaceModelStateHandler_lower(handler),$0
+open func registerModelStateHandler(handler: ModelStateHandler?)  {try! rustCall() {
+    uniffi_uzu_plus_fn_method_engine_registermodelstatehandler(self.uniffiClonePointer(),
+        FfiConverterOptionCallbackInterfaceModelStateHandler.lower(handler),$0
     )
 }
 }
@@ -4872,6 +4878,78 @@ fileprivate struct FfiConverterOptionTypeFinishReason: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionCallbackInterfaceCloudModelsHandler: FfiConverterRustBuffer {
+    typealias SwiftType = CloudModelsHandler?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceCloudModelsHandler.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceCloudModelsHandler.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionCallbackInterfaceLicenseStatusHandler: FfiConverterRustBuffer {
+    typealias SwiftType = LicenseStatusHandler?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceLicenseStatusHandler.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceLicenseStatusHandler.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionCallbackInterfaceModelStateHandler: FfiConverterRustBuffer {
+    typealias SwiftType = ModelStateHandler?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceModelStateHandler.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceModelStateHandler.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -5070,13 +5148,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_engine_pause_model() != 42664) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_register_cloud_models_handler() != 7831) {
+    if (uniffi_uzu_plus_checksum_method_engine_registercloudmodelshandler() != 59789) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_register_license_status_handler() != 12399) {
+    if (uniffi_uzu_plus_checksum_method_engine_registerlicensestatushandler() != 52627) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_register_model_state_handler() != 6455) {
+    if (uniffi_uzu_plus_checksum_method_engine_registermodelstatehandler() != 54683) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_modeldownloadhandle_delete() != 1956) {
