@@ -37,16 +37,16 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudMode
         }
     }
 
-    public func createSession(_ modelId: ModelId, config: Config) throws -> Session {
-        try engine.createSession(modelId: modelId, config: config)
+    public func createSession(_ repodId: String, modelType: ModelType, config: Config) throws -> Session {
+        try engine.createSession(repoId: repodId, modelType: modelType, config: config)
     }
     
-    public func downloadHandle(identifier: String) -> ModelDownloadHandle {
-        engine.downloadHandle(identifier: identifier)
+    public func downloadHandle(repoId: String) throws -> ModelDownloadHandle {
+        try engine.downloadHandle(repoId: repoId)
     }
 
-    public func downloadState(identifier: String) -> ModelDownloadState? {
-        localModels.first(where: { $0.identifier == identifier })?.state
+    public func downloadState(repoId: String) -> ModelDownloadState? {
+        localModels.first(where: { $0.repoId == repoId })?.state
     }
 
     nonisolated public func onStatus(status: LicenseStatus) {
@@ -79,15 +79,15 @@ public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudMode
 
     // MARK: - Model management convenience
 
-    public func downloadModel(identifier: String) async throws {
-        try await self.engine.downloadModel(identifier: identifier)
+    public func downloadModel(repoId: String) async throws {
+        try await self.engine.downloadModel(repoId: repoId)
     }
 
-    public func deleteModel(identifier: String) async throws {
-        try await self.engine.deleteModel(identifier: identifier)
+    public func deleteModel(repoId: String) async throws {
+        try await self.engine.deleteModel(repoId: repoId)
     }
 
-    public func pauseModel(identifier: String) async throws {
-        try await self.engine.pauseModel(identifier: identifier)
+    public func pauseModel(repoId: String) async throws {
+        try await self.engine.pauseModel(repoId: repoId)
     }
 }

@@ -3,59 +3,49 @@ import Uzu
 
 @MainActor public func runClassification() async throws {
     let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: API_KEY)
+    let status = try await engine.activate(apiKey: "API_KEY")
+    guard status == .activated || status == .gracePeriodActive else {
+        return
+    }
 
-    guard status == .activated || status == .gracePeriodActive
-    else { throw Error.licenseNotActive(status) }
+    let repoId = "Qwen/Qwen3-0.6B"
 
-    let localModelId = "Alibaba-Qwen3-0.6B"
-
-    let modelDownloadState = engine.downloadState(identifier: localModelId)
-    let handleDownloadProgress = makeDownloadProgressHandler()
+    let modelDownloadState = engine.downloadState(repoId: repoId)
     if modelDownloadState?.phase != .downloaded {
-        let handle = engine.downloadHandle(identifier: localModelId)
+        let handle = try engine.downloadHandle(repoId: repoId)
         try await handle.download()
         let progressStream = handle.progress()
-        while let upd = await progressStream.next() {
-            handleDownloadProgress(upd)
+        while let progressUpdate = await progressStream.next() {
+            print("Progress: \(progressUpdate.progress)")
         }
     }
 
-    // snippet:session-create-classification
     let feature = ClassificationFeature(
         name: "sentiment",
         values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
     )
     let config = Config(preset: .classification(feature: feature))
 
-    let modelId: ModelId = .local(id: localModelId)
-    let session = try engine.createSession(modelId, config: config)
-    // endsnippet:session-create-classification
+    let session = try engine.createSession(repoId, modelType: .local, config: config)
 
-    // snippet:session-input-classification
     let textToDetectFeature =
         "Today's been awesome! Everything just feels right, and I can't stop smiling."
     let prompt =
         "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Don't add a dot at the end."
     let input: Input = .text(text: prompt)
-    // endsnippet:session-input-classification
 
-    let handlePartialOutput = makePartialOutputHandler()
-
-    // snippet:session-run-classification
     let runConfig = RunConfig()
         .tokensLimit(32)
+        .enableThinking(false)
         .samplingPolicy(.custom(value: .greedy))
 
     let output = try session.run(
         input: input,
         config: runConfig
-    ) { partialOutput in
-        // Implement a custom partial output handler
-        handlePartialOutput(partialOutput)
+    ) { _ in
+        return true
     }
-    // endsnippet:session-run-classification
 
-    print("\n--- End of Generation ---")
-    print("Final Stats:", output.stats)
+    print("Prediction: \(output.text.original)")
+    print("Stats: \(output.stats)")
 }

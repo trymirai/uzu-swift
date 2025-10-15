@@ -5,13 +5,13 @@ import XCTest
 final class UzuEngineDownloadTests: XCTestCase {
     func testDownloadLlamaModel() async throws {
         let engine = UzuEngine()
-        let identifier = "Alibaba-Qwen3-0.6B"
+        let repoId = "Qwen/Qwen3-0.6B"
 
         let expectation = XCTestExpectation(description: "Model downloaded")
 
         Task {
             do {
-                let handle = engine.downloadHandle(identifier: identifier)
+                let handle = try engine.downloadHandle(repoId: repoId)
                 try await handle.download()
                 let stream = handle.progress()
                 while let update = await stream.next() {

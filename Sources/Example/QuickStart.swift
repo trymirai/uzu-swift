@@ -8,24 +8,26 @@ import Uzu
         return
     }
 
-    //update models list
-    let localModelIds = engine.localModels.map(\.identifier)
-    let localModelId = "Alibaba-Qwen3-0.6B"
+    //choose model
+    let repoId = "Qwen/Qwen3-0.6B"
 
     //download model
-    let modelDownloadState = engine.downloadState(identifier: localModelId)
+    let modelDownloadState = engine.downloadState(repoId: repoId)
     if modelDownloadState?.phase != .downloaded {
-        let handle = engine.downloadHandle(identifier: localModelId)
+        let handle = try engine.downloadHandle(repoId: repoId)
         try await handle.download()
         let progressStream = handle.progress()
-        while let downloadProgress = await progressStream.next() {
-            print("Progress: \(downloadProgress.progress)")
+        while let progressUpdate = await progressStream.next() {
+            print("Progress: \(progressUpdate.progress)")
         }
     }
 
-    //create inference session
-    let modelId: ModelId = .local(id: localModelId)
-    let session = try engine.createSession(modelId, config: .init(preset: .general))
+    //create session
+    let session = try engine.createSession(
+        repoId,
+        modelType: .local,
+        config: .init(preset: .general)
+    )
 
     //create input
     let messages = [
@@ -37,9 +39,9 @@ import Uzu
     //run
     let output = try session.run(
         input: input,
-        config: RunConfig().tokensLimit(256)
+        config: RunConfig()
     ) { _ in
         return true
     }
-    print("Output: \(output)")
+    print(output.text.original)
 }

@@ -1,10 +1,9 @@
 import Foundation
 import Uzu
 
-@MainActor public func runChat() async throws {
+@MainActor public func runSummarization() async throws {
     let engine = UzuEngine()
     let status = try await engine.activate(apiKey: "API_KEY")
-
     guard status == .activated || status == .gracePeriodActive else {
         return
     }
@@ -24,17 +23,18 @@ import Uzu
     let session = try engine.createSession(
         repoId,
         modelType: .local,
-        config: Config(preset: .general)
+        config: Config(preset: .summarization)
     )
 
-    let messages = [
-        Message(role: .system, content: "You are a helpful assistant."),
-        Message(role: .user, content: "Tell me a short, funny story about a robot."),
-    ]
-    let input: Input = .messages(messages: messages)
+    let textToSummarize =
+        "A Large Language Model (LLM) is a type of AI that processes and generates text using transformer-based architectures trained on vast datasets. They power chatbots, translation, code assistants, and more."
+    let input: Input = .text(
+        text: "Text is: \"\(textToSummarize)\". Write only summary itself.")
 
     let runConfig = RunConfig()
-        .tokensLimit(1024)
+        .tokensLimit(256)
+        .enableThinking(false)
+        .samplingPolicy(.custom(value: .greedy))
 
     let output = try session.run(
         input: input,
@@ -43,5 +43,9 @@ import Uzu
         return true
     }
 
-    print(output.text.original)
+    print("Summary: \(output.text.original)")
+    print(
+        "Model runs: \(output.stats.prefillStats.modelRun.count + (output.stats.generateStats?.modelRun.count ?? 0))"
+    )
+    print("Tokens count: \(output.stats.totalStats.tokensCountOutput)")
 }

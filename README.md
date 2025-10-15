@@ -22,10 +22,11 @@ Swift package for [uzu](https://github.com/trymirai/uzu), a **high-performance**
 
 ## Examples
 
+Set up your project through [Platform](https://platform.trymirai.com) and obtain an `API_KEY`. Place the `API_KEY` in the corresponding example file, and then run it using one of the following commands:
+
 ```shell
-# Set your API key in `Sources/Example/Common.swift`, then run the examples
 swift run example chat
-swift run example summarisation
+swift run example summarization
 swift run example classification
 ```
 
@@ -35,7 +36,7 @@ Add the `uzu-swift` dependency to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.26")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.27")
 ]
 ```
 
@@ -43,28 +44,25 @@ Create and activate engine:
 
 ```swift
 let engine = UzuEngine()
-let status = try await engine.activate(apiKey: API_KEY)
+let status = try await engine.activate(apiKey: "API_KEY")
 ```
 
 ### Choose model
 
 ```swift
-let localModels = engine.localModels
-let localModelId = "Alibaba-Qwen3-0.6B"
+let repoId = "Qwen/Qwen3-0.6B"
 ```
 
 ### Download with progress handle
 
 ```swift
-let modelDownloadState = engine.downloadState(identifier: localModelId)
-let handleDownloadProgress = makeDownloadProgressHandler()
-
+let modelDownloadState = engine.downloadState(repoId: repoId)
 if modelDownloadState?.phase != .downloaded {
-    let handle = engine.downloadHandle(identifier: localModelId)
+    let handle = try engine.downloadHandle(repoId: repoId)
     try await handle.download()
     let progressStream = handle.progress()
-    while let downloadProgress = await progressStream.next() {
-        handleDownloadProgress(downloadProgress)
+    while let progressUpdate = await progressStream.next() {
+        print("Progress: \(progressUpdate.progress)")
     }
 }
 ```
@@ -74,8 +72,11 @@ if modelDownloadState?.phase != .downloaded {
 `Session` is the core entity used to communicate with the model:
 
 ```swift
-let modelId: ModelId = .local(id: localModelId)
-let session = try engine.createSession(modelId, config: Config(preset: .general))
+let session = try engine.createSession(
+    repoId,
+    modelType: .local,
+    config: Config(preset: .general)
+)
 ```
 
 Once loaded, the same `Session` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
@@ -94,14 +95,13 @@ let input: Input = .messages(messages: messages)
 
 ```swift
 let runConfig = RunConfig()
-    .tokensLimit(128)
+    .tokensLimit(1024)
 
 let output = try session.run(
     input: input,
     config: runConfig
-) { partialOutput in
-    // Implement a custom partial output handler
-    handlePartialOutput(partialOutput)
+) { _ in
+    return true
 }
 ```
 
@@ -112,8 +112,11 @@ let output = try session.run(
 In this example, we will extract a summary of the input text:
 
 ```swift
-let modelId: ModelId = .local(id: localModelId)
-let session = try engine.createSession(modelId, config: Config(preset: .summarization))
+let session = try engine.createSession(
+    repoId,
+    modelType: .local,
+    config: Config(preset: .summarization)
+)
 ```
 
 ```swift
@@ -126,14 +129,14 @@ let input: Input = .text(
 ```swift
 let runConfig = RunConfig()
     .tokensLimit(256)
+    .enableThinking(false)
     .samplingPolicy(.custom(value: .greedy))
 
 let output = try session.run(
     input: input,
     config: runConfig
-) { partialOutput in
-    // Implement a custom partial output handler
-    handlePartialOutput(partialOutput)
+) { _ in
+    return true
 }
 ```
 
@@ -150,8 +153,7 @@ let feature = ClassificationFeature(
 )
 let config = Config(preset: .classification(feature: feature))
 
-let modelId: ModelId = .local(id: localModelId)
-let session = try engine.createSession(modelId, config: config)
+let session = try engine.createSession(repoId, modelType: .local, config: config)
 ```
 
 ```swift
@@ -165,14 +167,14 @@ let input: Input = .text(text: prompt)
 ```swift
 let runConfig = RunConfig()
     .tokensLimit(32)
+    .enableThinking(false)
     .samplingPolicy(.custom(value: .greedy))
 
 let output = try session.run(
     input: input,
     config: runConfig
-) { partialOutput in
-    // Implement a custom partial output handler
-    handlePartialOutput(partialOutput)
+) { _ in
+    return true
 }
 ```
 

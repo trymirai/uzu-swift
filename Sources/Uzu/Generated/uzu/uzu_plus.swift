@@ -552,16 +552,16 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func activate(apiKey: String) async throws  -> LicenseStatus
     
-    func createSession(modelId: ModelId, config: Config) throws  -> Session
+    func createSession(repoId: String, modelType: ModelType, config: Config) throws  -> Session
     
-    func deleteModel(identifier: String) async throws 
+    func deleteModel(repoId: String) async throws 
     
     /**
      * Returns a `DownloadHandle` for the given model identifier.
      */
-    func downloadHandle(identifier: String)  -> ModelDownloadHandle
+    func downloadHandle(repoId: String) throws  -> ModelDownloadHandle
     
-    func downloadModel(identifier: String) async throws 
+    func downloadModel(repoId: String) async throws 
     
     func fetchCloudModels() async throws  -> [CloudModel]
     
@@ -569,9 +569,11 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func getLocalModels()  -> [LocalModel]
     
-    func getState(identifier: String)  -> ModelDownloadState
+    func getState(repoId: String) throws  -> ModelDownloadState
     
-    func pauseModel(identifier: String) async throws 
+    func modelIdByRepoId(repoId: String) throws  -> String
+    
+    func pauseModel(repoId: String) async throws 
     
     /**
      * Register a callback that will receive cloud models snapshots.
@@ -671,22 +673,23 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
         )
 }
     
-open func createSession(modelId: ModelId, config: Config)throws  -> Session  {
+open func createSession(repoId: String, modelType: ModelType, config: Config)throws  -> Session  {
     return try  FfiConverterTypeSession_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
     uniffi_uzu_plus_fn_method_engine_createsession(self.uniffiClonePointer(),
-        FfiConverterTypeModelID_lower(modelId),
+        FfiConverterString.lower(repoId),
+        FfiConverterTypeModelType_lower(modelType),
         FfiConverterTypeConfig_lower(config),$0
     )
 })
 }
     
-open func deleteModel(identifier: String)async throws   {
+open func deleteModel(repoId: String)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_engine_delete_model(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(identifier)
+                    FfiConverterString.lower(repoId)
                 )
             },
             pollFunc: ffi_uzu_plus_rust_future_poll_void,
@@ -700,21 +703,21 @@ open func deleteModel(identifier: String)async throws   {
     /**
      * Returns a `DownloadHandle` for the given model identifier.
      */
-open func downloadHandle(identifier: String) -> ModelDownloadHandle  {
-    return try!  FfiConverterTypeModelDownloadHandle_lift(try! rustCall() {
+open func downloadHandle(repoId: String)throws  -> ModelDownloadHandle  {
+    return try  FfiConverterTypeModelDownloadHandle_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
     uniffi_uzu_plus_fn_method_engine_download_handle(self.uniffiClonePointer(),
-        FfiConverterString.lower(identifier),$0
+        FfiConverterString.lower(repoId),$0
     )
 })
 }
     
-open func downloadModel(identifier: String)async throws   {
+open func downloadModel(repoId: String)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_engine_download_model(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(identifier)
+                    FfiConverterString.lower(repoId)
                 )
             },
             pollFunc: ffi_uzu_plus_rust_future_poll_void,
@@ -766,21 +769,29 @@ open func getLocalModels() -> [LocalModel]  {
 })
 }
     
-open func getState(identifier: String) -> ModelDownloadState  {
-    return try!  FfiConverterTypeModelDownloadState_lift(try! rustCall() {
+open func getState(repoId: String)throws  -> ModelDownloadState  {
+    return try  FfiConverterTypeModelDownloadState_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
     uniffi_uzu_plus_fn_method_engine_get_state(self.uniffiClonePointer(),
-        FfiConverterString.lower(identifier),$0
+        FfiConverterString.lower(repoId),$0
     )
 })
 }
     
-open func pauseModel(identifier: String)async throws   {
+open func modelIdByRepoId(repoId: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
+    uniffi_uzu_plus_fn_method_engine_model_id_by_repo_id(self.uniffiClonePointer(),
+        FfiConverterString.lower(repoId),$0
+    )
+})
+}
+    
+open func pauseModel(repoId: String)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_engine_pause_model(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(identifier)
+                    FfiConverterString.lower(repoId)
                 )
             },
             pollFunc: ffi_uzu_plus_rust_future_poll_void,
@@ -1588,63 +1599,25 @@ public func FfiConverterTypeConfig_lower(_ value: Config) -> RustBuffer {
 
 
 public struct LocalModel {
-    /**
-     * Unique identifier of the model in the form `<vendor>-<name>-<precision>`.
-     */
     public var identifier: String
-    /**
-     * Vendor/author of the model (e.g. "Alibaba", "Meta").
-     */
+    public var repoId: String
+    public var family: String
     public var vendor: String
-    /**
-     * Human-readable model name without vendor (e.g. "Qwen2.5-0.5B-Instruct").
-     */
     public var name: String
-    /**
-     * Precision of the model (e.g. "bfloat16", "float16").
-     */
-    public var precision: String
-    /**
-     * Quantization type if the model is quantized (e.g. "uint4").
-     */
+    public var size: String
     public var quantization: String?
-    /**
-     * Optional regex to parse model output provided by the backend.
-     */
     public var outputParserRegex: String?
-    /**
-     * Current download/installation state.
-     */
     public var state: ModelDownloadState
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(
-        /**
-         * Unique identifier of the model in the form `<vendor>-<name>-<precision>`.
-         */identifier: String, 
-        /**
-         * Vendor/author of the model (e.g. "Alibaba", "Meta").
-         */vendor: String, 
-        /**
-         * Human-readable model name without vendor (e.g. "Qwen2.5-0.5B-Instruct").
-         */name: String, 
-        /**
-         * Precision of the model (e.g. "bfloat16", "float16").
-         */precision: String, 
-        /**
-         * Quantization type if the model is quantized (e.g. "uint4").
-         */quantization: String?, 
-        /**
-         * Optional regex to parse model output provided by the backend.
-         */outputParserRegex: String?, 
-        /**
-         * Current download/installation state.
-         */state: ModelDownloadState) {
+    public init(identifier: String, repoId: String, family: String, vendor: String, name: String, size: String, quantization: String?, outputParserRegex: String?, state: ModelDownloadState) {
         self.identifier = identifier
+        self.repoId = repoId
+        self.family = family
         self.vendor = vendor
         self.name = name
-        self.precision = precision
+        self.size = size
         self.quantization = quantization
         self.outputParserRegex = outputParserRegex
         self.state = state
@@ -1661,13 +1634,19 @@ extension LocalModel: Equatable, Hashable {
         if lhs.identifier != rhs.identifier {
             return false
         }
+        if lhs.repoId != rhs.repoId {
+            return false
+        }
+        if lhs.family != rhs.family {
+            return false
+        }
         if lhs.vendor != rhs.vendor {
             return false
         }
         if lhs.name != rhs.name {
             return false
         }
-        if lhs.precision != rhs.precision {
+        if lhs.size != rhs.size {
             return false
         }
         if lhs.quantization != rhs.quantization {
@@ -1684,9 +1663,11 @@ extension LocalModel: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(identifier)
+        hasher.combine(repoId)
+        hasher.combine(family)
         hasher.combine(vendor)
         hasher.combine(name)
-        hasher.combine(precision)
+        hasher.combine(size)
         hasher.combine(quantization)
         hasher.combine(outputParserRegex)
         hasher.combine(state)
@@ -1703,9 +1684,11 @@ public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
         return
             try LocalModel(
                 identifier: FfiConverterString.read(from: &buf), 
+                repoId: FfiConverterString.read(from: &buf), 
+                family: FfiConverterString.read(from: &buf), 
                 vendor: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
-                precision: FfiConverterString.read(from: &buf), 
+                size: FfiConverterString.read(from: &buf), 
                 quantization: FfiConverterOptionString.read(from: &buf), 
                 outputParserRegex: FfiConverterOptionString.read(from: &buf), 
                 state: FfiConverterTypeModelDownloadState.read(from: &buf)
@@ -1714,9 +1697,11 @@ public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
 
     public static func write(_ value: LocalModel, into buf: inout [UInt8]) {
         FfiConverterString.write(value.identifier, into: &buf)
+        FfiConverterString.write(value.repoId, into: &buf)
+        FfiConverterString.write(value.family, into: &buf)
         FfiConverterString.write(value.vendor, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
-        FfiConverterString.write(value.precision, into: &buf)
+        FfiConverterString.write(value.size, into: &buf)
         FfiConverterOptionString.write(value.quantization, into: &buf)
         FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
         FfiConverterTypeModelDownloadState.write(value.state, into: &buf)
@@ -3396,79 +3381,6 @@ extension ModelDownloadPhase: Equatable, Hashable {}
 
 
 
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-
-public enum ModelId {
-    
-    case local(id: String
-    )
-    case cloud(id: String
-    )
-}
-
-
-#if compiler(>=6)
-extension ModelId: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeModelID: FfiConverterRustBuffer {
-    typealias SwiftType = ModelId
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelId {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .local(id: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 2: return .cloud(id: try FfiConverterString.read(from: &buf)
-        )
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: ModelId, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case let .local(id):
-            writeInt(&buf, Int32(1))
-            FfiConverterString.write(id, into: &buf)
-            
-        
-        case let .cloud(id):
-            writeInt(&buf, Int32(2))
-            FfiConverterString.write(id, into: &buf)
-            
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeModelID_lift(_ buf: RustBuffer) throws -> ModelId {
-    return try FfiConverterTypeModelID.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeModelID_lower(_ value: ModelId) -> RustBuffer {
-    return FfiConverterTypeModelID.lower(value)
-}
-
-
-extension ModelId: Equatable, Hashable {}
-
-
-
 
 public enum ModelStorageError: Swift.Error {
 
@@ -3599,6 +3511,73 @@ public func FfiConverterTypeModelStorageError_lower(_ value: ModelStorageError) 
 
 extension ModelStorageError: Equatable, Hashable {}
 
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ModelType {
+    
+    case local
+    case cloud
+}
+
+
+#if compiler(>=6)
+extension ModelType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelType: FfiConverterRustBuffer {
+    typealias SwiftType = ModelType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .local
+        
+        case 2: return .cloud
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ModelType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .local:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .cloud:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelType_lift(_ buf: RustBuffer) throws -> ModelType {
+    return try FfiConverterTypeModelType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelType_lower(_ value: ModelType) -> RustBuffer {
+    return FfiConverterTypeModelType.lower(value)
+}
+
+
+extension ModelType: Equatable, Hashable {}
 
 
 
@@ -4159,7 +4138,7 @@ public enum StorageError: Swift.Error {
     
     
     case ModelNotDownloaded
-    case UnknownModel(identifier: String
+    case UnknownModel(repoId: String
     )
     case Storage(message: String
     )
@@ -4184,7 +4163,7 @@ public struct FfiConverterTypeStorageError: FfiConverterRustBuffer {
         
         case 1: return .ModelNotDownloaded
         case 2: return .UnknownModel(
-            identifier: try FfiConverterString.read(from: &buf)
+            repoId: try FfiConverterString.read(from: &buf)
             )
         case 3: return .Storage(
             message: try FfiConverterString.read(from: &buf)
@@ -4209,9 +4188,9 @@ public struct FfiConverterTypeStorageError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .UnknownModel(identifier):
+        case let .UnknownModel(repoId):
             writeInt(&buf, Int32(2))
-            FfiConverterString.write(identifier, into: &buf)
+            FfiConverterString.write(repoId, into: &buf)
             
         
         case let .Storage(message):
@@ -5121,16 +5100,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_engine_activate() != 42274) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_createsession() != 14385) {
+    if (uniffi_uzu_plus_checksum_method_engine_createsession() != 46301) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_delete_model() != 61100) {
+    if (uniffi_uzu_plus_checksum_method_engine_delete_model() != 21033) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_download_handle() != 15221) {
+    if (uniffi_uzu_plus_checksum_method_engine_download_handle() != 57640) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_download_model() != 16804) {
+    if (uniffi_uzu_plus_checksum_method_engine_download_model() != 60375) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_fetch_cloud_models() != 34214) {
@@ -5142,10 +5121,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_engine_get_local_models() != 11177) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_get_state() != 21567) {
+    if (uniffi_uzu_plus_checksum_method_engine_get_state() != 15438) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_pause_model() != 42664) {
+    if (uniffi_uzu_plus_checksum_method_engine_model_id_by_repo_id() != 24900) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_pause_model() != 13242) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_registercloudmodelshandler() != 59789) {
