@@ -2387,16 +2387,18 @@ public struct StepStats {
     public var suffixLength: UInt64
     public var tokensCount: UInt64
     public var tokensPerSecond: Double
+    public var processedTokensPerSecond: Double
     public var modelRun: RunStats
     public var run: RunStats?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(duration: Double, suffixLength: UInt64, tokensCount: UInt64, tokensPerSecond: Double, modelRun: RunStats, run: RunStats?) {
+    public init(duration: Double, suffixLength: UInt64, tokensCount: UInt64, tokensPerSecond: Double, processedTokensPerSecond: Double, modelRun: RunStats, run: RunStats?) {
         self.duration = duration
         self.suffixLength = suffixLength
         self.tokensCount = tokensCount
         self.tokensPerSecond = tokensPerSecond
+        self.processedTokensPerSecond = processedTokensPerSecond
         self.modelRun = modelRun
         self.run = run
     }
@@ -2421,6 +2423,9 @@ extension StepStats: Equatable, Hashable {
         if lhs.tokensPerSecond != rhs.tokensPerSecond {
             return false
         }
+        if lhs.processedTokensPerSecond != rhs.processedTokensPerSecond {
+            return false
+        }
         if lhs.modelRun != rhs.modelRun {
             return false
         }
@@ -2435,6 +2440,7 @@ extension StepStats: Equatable, Hashable {
         hasher.combine(suffixLength)
         hasher.combine(tokensCount)
         hasher.combine(tokensPerSecond)
+        hasher.combine(processedTokensPerSecond)
         hasher.combine(modelRun)
         hasher.combine(run)
     }
@@ -2453,6 +2459,7 @@ public struct FfiConverterTypeStepStats: FfiConverterRustBuffer {
                 suffixLength: FfiConverterUInt64.read(from: &buf), 
                 tokensCount: FfiConverterUInt64.read(from: &buf), 
                 tokensPerSecond: FfiConverterDouble.read(from: &buf), 
+                processedTokensPerSecond: FfiConverterDouble.read(from: &buf), 
                 modelRun: FfiConverterTypeRunStats.read(from: &buf), 
                 run: FfiConverterOptionTypeRunStats.read(from: &buf)
         )
@@ -2463,6 +2470,7 @@ public struct FfiConverterTypeStepStats: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.suffixLength, into: &buf)
         FfiConverterUInt64.write(value.tokensCount, into: &buf)
         FfiConverterDouble.write(value.tokensPerSecond, into: &buf)
+        FfiConverterDouble.write(value.processedTokensPerSecond, into: &buf)
         FfiConverterTypeRunStats.write(value.modelRun, into: &buf)
         FfiConverterOptionTypeRunStats.write(value.run, into: &buf)
     }
