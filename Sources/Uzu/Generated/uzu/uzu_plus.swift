@@ -3310,6 +3310,7 @@ public enum ModelDownloadPhase {
     case downloading
     case paused
     case downloaded
+    case locked
     case error
 }
 
@@ -3336,7 +3337,9 @@ public struct FfiConverterTypeModelDownloadPhase: FfiConverterRustBuffer {
         
         case 4: return .downloaded
         
-        case 5: return .error
+        case 5: return .locked
+        
+        case 6: return .error
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3362,8 +3365,12 @@ public struct FfiConverterTypeModelDownloadPhase: FfiConverterRustBuffer {
             writeInt(&buf, Int32(4))
         
         
-        case .error:
+        case .locked:
             writeInt(&buf, Int32(5))
+        
+        
+        case .error:
+            writeInt(&buf, Int32(6))
         
         }
     }
