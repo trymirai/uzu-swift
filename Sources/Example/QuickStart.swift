@@ -8,19 +8,13 @@ public func runQuickStart() async throws {
         print("Progress: \(update.progress)")
     }
 
-    let messages = [
-        Message(role: .system, content: "You are a helpful assistant."),
-        Message(role: .user, content: "Tell me a short, funny story about a robot."),
-    ]
-    let input: Input = .messages(messages: messages)
-
     let session = try engine.chatSession(model)
     let output = try session.run(
-        input: input,
+        input: .text(text: "Tell me a short, funny story about a robot"),
         config: RunConfig()
     ) { _ in
         return true
     }
-    
+
     print(output.text.original)
 }

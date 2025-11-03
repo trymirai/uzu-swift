@@ -11,7 +11,7 @@ struct Example: AsyncParsableCommand {
     )
 
     @Argument(
-        help: "Mode: chat | summarization | classification | quick-start | snippets",
+        help: "Mode: chat | summarization | classification | quick-start | snippets | cloud",
         transform: { $0.lowercased() })
     var mode: String = "chat"
 
@@ -27,6 +27,8 @@ struct Example: AsyncParsableCommand {
             try await runQuickStart()
         case "snippets":
             try await runSnippets()
+        case "cloud":
+            try await runCloud()
         default:
             throw ValidationError("Unknown mode: \(mode)")
         }

@@ -6,7 +6,8 @@
 
 <a href="https://artifacts.trymirai.com/social/about_us.mp3"><img src="https://img.shields.io/badge/Listen-Podcast-red" alt="Listen to our podcast"></a>
 <a href="https://docsend.com/v/76bpr/mirai2025"><img src="https://img.shields.io/badge/View-Deck-red" alt="View our deck"></a>
-<a href="mailto:alexey@getmirai.co,dima@getmirai.co,aleksei@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Send-Email-green" alt="Contact us"></a>
+<a href="https://discord.gg/gUhyn6Rb7x"><img src="https://img.shields.io/discord/1377764166764462120?label=Discord" alt="Discord"></a>
+<a href="mailto:contact@getmirai.co?subject=Interested%20in%20Mirai"><img src="https://img.shields.io/badge/Send-Email-green" alt="Contact us"></a>
 <a href="https://docs.trymirai.com/app-integration/overview"><img src="https://img.shields.io/badge/Read-Docs-blue" alt="Read docs"></a>
 [![Swift Version](https://img.shields.io/badge/Swift-5.9-blue)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
@@ -26,7 +27,7 @@ Add the `uzu` dependency to your project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.40")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.42")
 ]
 ```
 
@@ -59,6 +60,7 @@ Place the `API_KEY` you obtained earlier in the corresponding example file, and 
 swift run example chat
 swift run example summarization
 swift run example classification
+swift run example cloud
 ```
 
 ### Chat
@@ -116,7 +118,7 @@ public func runSummarization() async throws {
     }
 
     let textToSummarize =
-        "A Large Language Model (LLM) is a type of AI that processes and generates text using transformer-based architectures trained on vast datasets. They power chatbots, translation, code assistants, and more."
+        "A Large Language Model (LLM) is a type of artificial intelligence that processes and generates human-like text. It is trained on vast datasets containing books, articles, and web content, allowing it to understand and predict language patterns. LLMs use deep learning, particularly transformer-based architectures, to analyze text, recognize context, and generate coherent responses. These models have a wide range of applications, including chatbots, content creation, translation, and code generation. One of the key strengths of LLMs is their ability to generate contextually relevant text based on prompts. They utilize self-attention mechanisms to weigh the importance of words within a sentence, improving accuracy and fluency. Examples of popular LLMs include OpenAI's GPT series, Google's BERT, and Meta's LLaMA. As these models grow in size and sophistication, they continue to enhance human-computer interactions, making AI-powered communication more natural and effective."
     let input: Input = .text(
         text: "Text is: \"\(textToSummarize)\". Write only summary itself.")
 
@@ -187,6 +189,29 @@ public func runClassification() async throws {
 ```
 
 You can view the stats to see that the answer will be ready immediately after the prefill step, and actual generation won’t even start due to speculative decoding, which significantly improves generation speed.
+
+### Cloud
+
+Sometimes you want to create a complex pipeline where some requests are processed on-device and the more complex ones are handled in the cloud using a larger model. With `uzu`, you can do this easily: just choose the cloud model you want to use and perform all requests through the same API:
+
+```swift
+import Uzu
+
+public func runCloud() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
+    let model = try await engine.chatModel(repoId: "openai/gpt-oss-120b")
+    let session = try engine.chatSession(model)
+    let output = try session.run(
+        input: .text(text: "How LLMs work"),
+        config: RunConfig()
+    ) { _ in
+        return true
+    }
+    print(output.text.original)
+}
+```
+
+> To get access to cloud inference, please contact us via [Discord](https://discord.gg/gUhyn6Rb7x) or [email](mailto:contact@getmirai.co).
 
 ## License
 
