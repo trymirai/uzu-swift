@@ -3,21 +3,15 @@ import XCTest
 
 @MainActor
 final class UzuEngineDownloadTests: XCTestCase {
-    func testDownloadLlamaModel() async throws {
-        let engine = UzuEngine()
-        let repoId = "Qwen/Qwen3-0.6B"
+    func testDownloadModel() async throws {
+        let engine = try await UzuEngine.create(apiKey: "API_KEY")
+        let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B", types: [.local])
 
         let expectation = XCTestExpectation(description: "Model downloaded")
 
         Task {
             do {
-                let handle = try engine.downloadHandle(repoId: repoId)
-                try await handle.download()
-                let stream = handle.progress()
-                while let update = await stream.next() {
-                    let progress = update.progress
-                    print("Progress: \(Int(progress * 100))%")
-                }
+                try await engine.downloadChatModel(model)
                 expectation.fulfill()
             } catch {
                 XCTFail("Download failed with error: \(error.localizedDescription)")

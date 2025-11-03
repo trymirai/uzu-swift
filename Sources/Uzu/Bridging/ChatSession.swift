@@ -1,20 +1,6 @@
-import Foundation
 import uzu_plusFFI
 
-#if targetEnvironment(simulator)
-    enum SimulatorError: LocalizedError {
-        case notSupported
-
-        var errorDescription: String? {
-            switch self {
-            case .notSupported:
-                "iOS Simulator is not supported due to Metal Restrictions"
-            }
-        }
-    }
-#endif
-
-extension Session {
+extension ChatSession {
     public typealias ProgressClosure = @Sendable (Output) -> Bool
 
     private final class ProgressHandlerImpl: Sendable, ProgressHandler {

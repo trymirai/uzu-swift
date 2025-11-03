@@ -1,93 +1,126 @@
-import Foundation
 import Observation
+import uzu_plusFFI
 
-#if !targetEnvironment(simulator)
-    import uzu_plusFFI
-#endif
-
-@MainActor
 @Observable
-public final class UzuEngine: ModelStateHandler, LicenseStatusHandler, CloudModelsHandler {
-
-    // MARK: - Properties
-
-    public private(set) var localModels: Set<LocalModel> = []
-    public private(set) var cloudModels: Set<CloudModel> = []
-    public private(set) var licenseStatus: LicenseStatus = .notActivated
+public final class UzuEngine {
+    @MainActor public private(set) var licenseStatus: LicenseStatus = .notActivated
+    @MainActor public private(set) var downloadStates: [String: ModelDownloadState] = [:]
+    @MainActor public private(set) var chatModels: Set<ChatModel> = []
 
     private let engine: Engine
 
-    public init() {
-        self.engine = Engine.make()
+    public init() throws {
+        let engine = Engine.make()
+        self.engine = engine
 
-        engine.registerLicenseStatusHandler(handler: self)
-        engine.registerModelStateHandler(handler: self)
-        engine.registerCloudModelsHandler(handler: self)
-
-        let initialModels = engine.getLocalModels()
-        self.localModels = Set(initialModels)
+        try engine.registerLicenseStatusHandler(handler: self)
+        try engine.registerModelDownloadStateHandler(handler: self)
+        try engine.registerChatModelsHandler(handler: self)
     }
 
-    public func refreshCloudModels() async {
-        do {
-            let models = try await engine.fetchCloudModels()
-            self.cloudModels = Set(models)
-        } catch {
-            self.cloudModels = []
+    public static func create(apiKey: String) async throws -> Self {
+        let engine = try Self.init();
+        let licenseStatus = try await engine.activate(apiKey: apiKey);
+        switch licenseStatus {
+        case .activated, .gracePeriodActive:
+            break;
+        case .notActivated, .invalidApiKey, .httpError, .networkError, .paymentRequired, .signatureMismatch, .timeout:
+            throw UzuError.licenseNotActivated
         }
+        let _ = try await engine.chatModels();
+        return engine
     }
-
-    public func createSession(_ repodId: String, modelType: ModelType, config: Config) throws -> Session {
-        try engine.createSession(repoId: repodId, modelType: modelType, config: config)
-    }
-    
-    public func downloadHandle(repoId: String) throws -> ModelDownloadHandle {
-        try engine.downloadHandle(repoId: repoId)
-    }
-
-    public func downloadState(repoId: String) -> ModelDownloadState? {
-        localModels.first(where: { $0.repoId == repoId })?.state
-    }
-
-    nonisolated public func onStatus(status: LicenseStatus) {
-        Task { @MainActor in
-            self.licenseStatus = status
-        }
-    }
-
-    nonisolated public func onLocalModel(model: LocalModel) {
-        Task { @MainActor in
-            if let existing = self.localModels.first(where: { $0.identifier == model.identifier }) {
-                self.localModels.remove(existing)
-            }
-            self.localModels.insert(model)
-        }
-    }
-
-    nonisolated public func onCloudModels(models: [CloudModel]) {
-        Task { @MainActor in
-            self.cloudModels = Set(models)
-        }
-    }
-
-    // MARK: - License activation
 
     @discardableResult
     public func activate(apiKey: String) async throws -> LicenseStatus {
-        try await engine.activate(apiKey: apiKey)
+        return try await engine.activate(apiKey: apiKey)
     }
 
-    // MARK: - Model management convenience
-
-    public func downloadModel(repoId: String) async throws {
-        try await self.engine.downloadModel(repoId: repoId)
+    public func getDownloadState(repoId: String) throws -> ModelDownloadState {
+        return try self.engine.getModelDownloadState(repoId: repoId)
     }
 
-    public func deleteModel(repoId: String) async throws {
-        try await self.engine.deleteModel(repoId: repoId)
+    public func downloadHandle(repoId: String) throws -> ModelDownloadHandle {
+        return try self.engine.createModelDownloadHandle(repoId: repoId)
     }
 
-    public func pauseModel(repoId: String) async throws {
-        try await self.engine.pauseModel(repoId: repoId)
+    public func chatModels(types: [ModelType] = [.local, .cloud]) async throws -> [ChatModel] {
+        return try await engine.getChatModels(types: types)
+    }
+
+    public func chatModel(repoId: String, types: [ModelType] = [.local, .cloud]) async throws -> ChatModel {
+        let chatModels = try await self.chatModels(types: types)
+        guard let chatModel = chatModels.first(where: { $0.repoId == repoId }) else {
+            throw UzuError.modelNotFound
+        }
+        return chatModel
+    }
+
+    @discardableResult
+    public func downloadChatModel(_ model: ChatModel, progressBlock: (ProgressUpdate) -> Void = {_ in}) async throws -> ModelDownloadState {
+        switch model.type {
+        case .local:
+            break;
+        case .cloud:
+            throw UzuError.unexpectedModelType
+        }
+
+        let downloadHandle = try self.downloadHandle(repoId: model.repoId)
+        let state = try await downloadHandle.state();
+        switch state.phase {
+        case .downloaded:
+            break;
+        case .paused, .notDownloaded, .downloading, .error, .locked:
+            try await downloadHandle.download();
+            let progressStream = downloadHandle.progress()
+            while let progressUpdate = await progressStream.next() {
+                progressBlock(progressUpdate)
+            }
+            break;
+        }
+
+        let finalState = try await downloadHandle.state();
+        return finalState;
+    }
+
+    public func chatSession(_ chatModel: ChatModel, config: Config = Config(preset: .general)) throws -> ChatSession {
+        #if targetEnvironment(simulator)
+            throw SimulatorError.notSupported
+        #endif
+        
+        try engine.createChatSession(model: chatModel, config: config)
+    }
+}
+
+extension UzuEngine: LicenseStatusHandler {
+    public func onLicenseStatusChanged(status: LicenseStatus) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            self.licenseStatus = status
+        }
+    }
+}
+
+extension UzuEngine: ModelDownloadStateHandler {
+    public func onModelDownloadStateChanged(repoId: String, state: ModelDownloadState) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            self.downloadStates[repoId] = state;
+        }
+    }
+}
+
+extension UzuEngine: ChatModelsHandler {
+    public func onChatModelsChanged(models: [ChatModel]) {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatModels = Set(models)
+        }
     }
 }

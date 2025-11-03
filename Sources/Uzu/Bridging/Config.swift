@@ -1,4 +1,3 @@
-import Foundation
 import uzu_plusFFI
 
 extension Config {

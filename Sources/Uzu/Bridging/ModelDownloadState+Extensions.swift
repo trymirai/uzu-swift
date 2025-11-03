@@ -1,4 +1,4 @@
-import Foundation
+import uzu_plusFFI
 
 extension ModelDownloadState {
     /// Fraction in range 0‒1 of the download that has completed.

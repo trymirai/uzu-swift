@@ -20,166 +20,174 @@ Swift package for [uzu](https://github.com/trymirai/uzu), a **high-performance**
 - [Broad model support](https://trymirai.com/models)
 - Observable model manager
 
+## Quick Start
+
+Add the `uzu` dependency to your project:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.40")
+]
+```
+
+Set up your project through [Platform](https://platform.trymirai.com) and obtain an `API_KEY`. Then, choose the model you want from the [library](https://platform.trymirai.com/models) and run it with the following snippet using the corresponding identifier:
+
+```swift
+let engine = try await UzuEngine.create(apiKey: "API_KEY")
+
+let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+try await engine.downloadChatModel(model) { update in
+    print("Progress: \(update.progress)")
+}
+
+let session = try engine.chatSession(model)
+let output = try session.run(
+    input: .text(text: "Tell me a short, funny story about a robot"),
+    config: RunConfig()
+) { _ in
+    return true
+}
+```
+
+Everything from model downloading to inference configuration is handled automatically. Refer to the [documentation](https://docs.trymirai.com) for details on how to customize each step of the process.
+
 ## Examples
 
-Set up your project through [Platform](https://platform.trymirai.com) and obtain an `API_KEY`. Place the `API_KEY` in the corresponding example file, and then run it using one of the following commands:
+Place the `API_KEY` you obtained earlier in the corresponding example file, and then run it using one of the following commands:
 
-```shell
+```bash
 swift run example chat
 swift run example summarization
 swift run example classification
 ```
 
-### Setup
-
-Add the `uzu-swift` dependency to your `Package.swift`:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.39")
-]
-```
-
-Create and activate engine:
-
-```swift
-let engine = UzuEngine()
-let status = try await engine.activate(apiKey: "API_KEY")
-```
-
-### Choose model
-
-```swift
-let repoId = "Qwen/Qwen3-0.6B"
-```
-
-### Download with progress handle
-
-```swift
-let modelDownloadState = engine.downloadState(repoId: repoId)
-if modelDownloadState?.phase != .downloaded {
-    let handle = try engine.downloadHandle(repoId: repoId)
-    try await handle.download()
-    let progressStream = handle.progress()
-    while let progressUpdate = await progressStream.next() {
-        print("Progress: \(progressUpdate.progress)")
-    }
-}
-```
-
-### Session
-
-`Session` is the core entity used to communicate with the model:
-
-```swift
-let session = try engine.createSession(
-    repoId,
-    modelType: .local,
-    config: Config(preset: .general)
-)
-```
-
-Once loaded, the same `Session` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
-
 ### Chat
 
-After creating it, you can run the `Session` with a specific prompt or a list of messages:
+In this example, we will download a model and get a reply to a specific list of messages:
 
 ```swift
-let messages = [
-    Message(role: .system, content: "You are a helpful assistant."),
-    Message(role: .user, content: "Tell me a short, funny story about a robot."),
-]
-let input: Input = .messages(messages: messages)
-```
+import Foundation
+import Uzu
 
-```swift
-let runConfig = RunConfig()
-    .tokensLimit(1024)
+public func runChat() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-let output = try session.run(
-    input: input,
-    config: runConfig
-) { _ in
-    return true
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
+
+    let messages = [
+        Message(role: .system, content: "You are a helpful assistant."),
+        Message(role: .user, content: "Tell me a short, funny story about a robot."),
+    ]
+    let input: Input = .messages(messages: messages)
+
+    let session = try engine.chatSession(model)
+    let runConfig = RunConfig()
+        .tokensLimit(1024)
+    let output = try session.run(
+        input: input,
+        config: runConfig
+    ) { _ in
+        return true
+    }
+    
+    print(output.text.original)
 }
 ```
 
-`Output` also includes generation metrics such as prefill duration and tokens per second. It’s important to note that you should run a **release** build to obtain accurate metrics.
+Once loaded, the same `ChatSession` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
 
 ### Summarization
 
-In this example, we will extract a summary of the input text:
+In this example, we will use the `summarization` preset to generate a summary of the input text:
 
 ```swift
-let session = try engine.createSession(
-    repoId,
-    modelType: .local,
-    config: Config(preset: .summarization)
-)
-```
+import Foundation
+import Uzu
 
-```swift
-let textToSummarize =
-    "A Large Language Model (LLM) is a type of AI that processes and generates text using transformer-based architectures trained on vast datasets. They power chatbots, translation, code assistants, and more."
-let input: Input = .text(
-    text: "Text is: \"\(textToSummarize)\". Write only summary itself.")
-```
+public func runSummarization() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-```swift
-let runConfig = RunConfig()
-    .tokensLimit(256)
-    .enableThinking(false)
-    .samplingPolicy(.custom(value: .greedy))
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
 
-let output = try session.run(
-    input: input,
-    config: runConfig
-) { _ in
-    return true
+    let textToSummarize =
+        "A Large Language Model (LLM) is a type of AI that processes and generates text using transformer-based architectures trained on vast datasets. They power chatbots, translation, code assistants, and more."
+    let input: Input = .text(
+        text: "Text is: \"\(textToSummarize)\". Write only summary itself.")
+
+    let session = try engine.chatSession(model, config: Config(preset: .summarization))
+    let runConfig = RunConfig()
+        .tokensLimit(256)
+        .enableThinking(false)
+        .samplingPolicy(.custom(value: .greedy))
+    let output = try session.run(
+        input: input,
+        config: runConfig
+    ) { _ in
+        return true
+    }
+
+    print("Summary: \(output.text.original)")
+    print(
+        "Model runs: \(output.stats.prefillStats.modelRun.count + (output.stats.generateStats?.modelRun.count ?? 0))"
+    )
+    print("Tokens count: \(output.stats.totalStats.tokensCountOutput)")
 }
 ```
 
-This will generate ~34 output tokens with only ~5 model runs during the generation phase, instead of ~34 runs.
+You will notice that the model’s run count is lower than the actual number of generated tokens due to speculative decoding, which significantly improves generation speed.
 
 ### Classification
 
-Let’s look at a case where you need to classify input text based on a specific feature, such as `sentiment`:
+In this example, we will use the `classification` preset to determine the sentiment of the user's input:
 
 ```swift
-let feature = ClassificationFeature(
-    name: "sentiment",
-    values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
-)
-let config = Config(preset: .classification(feature: feature))
+import Foundation
+import Uzu
 
-let session = try engine.createSession(repoId, modelType: .local, config: config)
-```
+public func runClassification() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-```swift
-let textToDetectFeature =
-    "Today's been awesome! Everything just feels right, and I can't stop smiling."
-let prompt =
-    "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Don't add a dot at the end."
-let input: Input = .text(text: prompt)
-```
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
 
-```swift
-let runConfig = RunConfig()
-    .tokensLimit(32)
-    .enableThinking(false)
-    .samplingPolicy(.custom(value: .greedy))
+    let feature = ClassificationFeature(
+        name: "sentiment",
+        values: ["Happy", "Sad", "Angry", "Fearful", "Surprised", "Disgusted"]
+    )
+    let textToDetectFeature =
+        "Today's been awesome! Everything just feels right, and I can't stop smiling."
+    let prompt =
+        "Text is: \"\(textToDetectFeature)\". Choose \(feature.name) from the list: \(feature.values.joined(separator: ", ")). Answer with one word. Don't add a dot at the end."
+    let input: Input = .text(text: prompt)
 
-let output = try session.run(
-    input: input,
-    config: runConfig
-) { _ in
-    return true
+    let config = Config(preset: .classification(feature: feature))
+    let session = try engine.chatSession(model, config: config)
+    let runConfig = RunConfig()
+        .tokensLimit(32)
+        .enableThinking(false)
+        .samplingPolicy(.custom(value: .greedy))
+    let output = try session.run(
+        input: input,
+        config: runConfig
+    ) { _ in
+        return true
+    }
+    
+    print("Prediction: \(output.text.original)")
+    print("Stats: \(output.stats)")
 }
 ```
 
-In this example, you will get the answer `Happy` immediately after the prefill step, and the actual generation won't even start.
+You can view the stats to see that the answer will be ready immediately after the prefill step, and actual generation won’t even start due to speculative decoding, which significantly improves generation speed.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

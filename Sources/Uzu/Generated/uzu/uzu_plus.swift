@@ -545,58 +545,150 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 
-/**
- * Thin FFI wrapper around `ModelStorage`.
- */
+public protocol ChatSessionProtocol: AnyObject, Sendable {
+    
+    func run(input: Input, config: RunConfig, progress: ProgressHandler) throws  -> Output
+    
+}
+open class ChatSession: ChatSessionProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_chatsession(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_chatsession(pointer, $0) }
+    }
+
+    
+
+    
+open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws  -> Output  {
+    return try  FfiConverterTypeOutput_lift(try rustCallWithError(FfiConverterTypeError_lift) {
+    uniffi_uzu_plus_fn_method_chatsession_run(self.uniffiClonePointer(),
+        FfiConverterTypeInput_lower(input),
+        FfiConverterTypeRunConfig_lower(config),
+        FfiConverterCallbackInterfaceProgressHandler_lower(progress),$0
+    )
+})
+}
+    
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatSession: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = ChatSession
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> ChatSession {
+        return ChatSession(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: ChatSession) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatSession {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: ChatSession, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatSession_lift(_ pointer: UnsafeMutableRawPointer) throws -> ChatSession {
+    return try FfiConverterTypeChatSession.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatSession_lower(_ value: ChatSession) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeChatSession.lower(value)
+}
+
+
+
+
+
+
 public protocol EngineProtocol: AnyObject, Sendable {
     
     func activate(apiKey: String) async throws  -> LicenseStatus
     
-    func createSession(repoId: String, modelType: ModelType, config: Config) throws  -> Session
+    func createChatSession(model: ChatModel, config: Config) throws  -> ChatSession
     
-    func deleteModel(repoId: String) async throws 
+    func createModelDownloadHandle(repoId: String) throws  -> ModelDownloadHandle
     
-    /**
-     * Returns a `DownloadHandle` for the given model identifier.
-     */
-    func downloadHandle(repoId: String) throws  -> ModelDownloadHandle
+    func getChatModels(types: [ModelType]) async throws  -> [ChatModel]
     
-    func downloadModel(repoId: String) async throws 
+    func getModelDownloadState(repoId: String) throws  -> ModelDownloadState
     
-    func fetchCloudModels() async throws  -> [CloudModel]
+    func registerChatModelsHandler(handler: ChatModelsHandler?) throws 
     
-    func getCloudModels() async throws  -> [CloudModel]
+    func registerLicenseStatusHandler(handler: LicenseStatusHandler?) throws 
     
-    func getLocalModels()  -> [LocalModel]
-    
-    func getState(repoId: String) throws  -> ModelDownloadState
-    
-    func modelIdByRepoId(repoId: String) throws  -> String
-    
-    func pauseModel(repoId: String) async throws 
-    
-    /**
-     * Register a callback that will receive cloud models snapshots.
-     * Pass None to unregister the handler.
-     */
-    func registerCloudModelsHandler(handler: CloudModelsHandler?) 
-    
-    /**
-     * Register a Rust callback that will receive license status updates.
-     * Pass None to unregister the handler.
-     */
-    func registerLicenseStatusHandler(handler: LicenseStatusHandler?) 
-    
-    /**
-     * Register a callback that will receive model state updates.
-     * Pass None to unregister the handler.
-     */
-    func registerModelStateHandler(handler: ModelStateHandler?) 
+    func registerModelDownloadStateHandler(handler: ModelDownloadStateHandler?) throws 
     
 }
-/**
- * Thin FFI wrapper around `ModelStorage`.
- */
 open class Engine: EngineProtocol, @unchecked Sendable {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
@@ -673,164 +765,65 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
         )
 }
     
-open func createSession(repoId: String, modelType: ModelType, config: Config)throws  -> Session  {
-    return try  FfiConverterTypeSession_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_createsession(self.uniffiClonePointer(),
-        FfiConverterString.lower(repoId),
-        FfiConverterTypeModelType_lower(modelType),
+open func createChatSession(model: ChatModel, config: Config)throws  -> ChatSession  {
+    return try  FfiConverterTypeChatSession_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
+    uniffi_uzu_plus_fn_method_engine_createchatsession(self.uniffiClonePointer(),
+        FfiConverterTypeChatModel_lower(model),
         FfiConverterTypeConfig_lower(config),$0
     )
 })
 }
     
-open func deleteModel(repoId: String)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_delete_model(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(repoId)
-                )
-            },
-            pollFunc: ffi_uzu_plus_rust_future_poll_void,
-            completeFunc: ffi_uzu_plus_rust_future_complete_void,
-            freeFunc: ffi_uzu_plus_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeEngineError_lift
-        )
-}
-    
-    /**
-     * Returns a `DownloadHandle` for the given model identifier.
-     */
-open func downloadHandle(repoId: String)throws  -> ModelDownloadHandle  {
+open func createModelDownloadHandle(repoId: String)throws  -> ModelDownloadHandle  {
     return try  FfiConverterTypeModelDownloadHandle_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_download_handle(self.uniffiClonePointer(),
+    uniffi_uzu_plus_fn_method_engine_create_model_download_handle(self.uniffiClonePointer(),
         FfiConverterString.lower(repoId),$0
     )
 })
 }
     
-open func downloadModel(repoId: String)async throws   {
+open func getChatModels(types: [ModelType])async throws  -> [ChatModel]  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_download_model(
+                uniffi_uzu_plus_fn_method_engine_get_chat_models(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(repoId)
-                )
-            },
-            pollFunc: ffi_uzu_plus_rust_future_poll_void,
-            completeFunc: ffi_uzu_plus_rust_future_complete_void,
-            freeFunc: ffi_uzu_plus_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeEngineError_lift
-        )
-}
-    
-open func fetchCloudModels()async throws  -> [CloudModel]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_fetch_cloud_models(
-                    self.uniffiClonePointer()
-                    
+                    FfiConverterSequenceTypeModelType.lower(types)
                 )
             },
             pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
             completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
             freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeCloudModel.lift,
+            liftFunc: FfiConverterSequenceTypeChatModel.lift,
             errorHandler: FfiConverterTypeEngineError_lift
         )
 }
     
-open func getCloudModels()async throws  -> [CloudModel]  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_get_cloud_models(
-                    self.uniffiClonePointer()
-                    
-                )
-            },
-            pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
-            completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
-            freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterSequenceTypeCloudModel.lift,
-            errorHandler: FfiConverterTypeEngineError_lift
-        )
-}
-    
-open func getLocalModels() -> [LocalModel]  {
-    return try!  FfiConverterSequenceTypeLocalModel.lift(try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_get_local_models(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-open func getState(repoId: String)throws  -> ModelDownloadState  {
+open func getModelDownloadState(repoId: String)throws  -> ModelDownloadState  {
     return try  FfiConverterTypeModelDownloadState_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_get_state(self.uniffiClonePointer(),
+    uniffi_uzu_plus_fn_method_engine_get_model_download_state(self.uniffiClonePointer(),
         FfiConverterString.lower(repoId),$0
     )
 })
 }
     
-open func modelIdByRepoId(repoId: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_model_id_by_repo_id(self.uniffiClonePointer(),
-        FfiConverterString.lower(repoId),$0
-    )
-})
-}
-    
-open func pauseModel(repoId: String)async throws   {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_uzu_plus_fn_method_engine_pause_model(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(repoId)
-                )
-            },
-            pollFunc: ffi_uzu_plus_rust_future_poll_void,
-            completeFunc: ffi_uzu_plus_rust_future_complete_void,
-            freeFunc: ffi_uzu_plus_rust_future_free_void,
-            liftFunc: { $0 },
-            errorHandler: FfiConverterTypeEngineError_lift
-        )
-}
-    
-    /**
-     * Register a callback that will receive cloud models snapshots.
-     * Pass None to unregister the handler.
-     */
-open func registerCloudModelsHandler(handler: CloudModelsHandler?)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_registercloudmodelshandler(self.uniffiClonePointer(),
-        FfiConverterOptionCallbackInterfaceCloudModelsHandler.lower(handler),$0
+open func registerChatModelsHandler(handler: ChatModelsHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
+    uniffi_uzu_plus_fn_method_engine_registerchatmodelshandler(self.uniffiClonePointer(),
+        FfiConverterOptionCallbackInterfaceChatModelsHandler.lower(handler),$0
     )
 }
 }
     
-    /**
-     * Register a Rust callback that will receive license status updates.
-     * Pass None to unregister the handler.
-     */
-open func registerLicenseStatusHandler(handler: LicenseStatusHandler?)  {try! rustCall() {
+open func registerLicenseStatusHandler(handler: LicenseStatusHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
     uniffi_uzu_plus_fn_method_engine_registerlicensestatushandler(self.uniffiClonePointer(),
         FfiConverterOptionCallbackInterfaceLicenseStatusHandler.lower(handler),$0
     )
 }
 }
     
-    /**
-     * Register a callback that will receive model state updates.
-     * Pass None to unregister the handler.
-     */
-open func registerModelStateHandler(handler: ModelStateHandler?)  {try! rustCall() {
-    uniffi_uzu_plus_fn_method_engine_registermodelstatehandler(self.uniffiClonePointer(),
-        FfiConverterOptionCallbackInterfaceModelStateHandler.lower(handler),$0
+open func registerModelDownloadStateHandler(handler: ModelDownloadStateHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
+    uniffi_uzu_plus_fn_method_engine_registermodeldownloadstatehandler(self.uniffiClonePointer(),
+        FfiConverterOptionCallbackInterfaceModelDownloadStateHandler.lower(handler),$0
     )
 }
 }
@@ -1231,110 +1224,89 @@ public func FfiConverterTypeProgressStream_lower(_ value: ProgressStream) -> Uns
 
 
 
+public struct ChatModel {
+    public var repoId: String
+    public var type: ModelType
+    public var name: String
+    public var vendor: String
+    public var quantization: String?
+    public var outputParserRegex: String?
 
-
-public protocol SessionProtocol: AnyObject, Sendable {
-    
-    func run(input: Input, config: RunConfig, progress: ProgressHandler) throws  -> Output
-    
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(repoId: String, type: ModelType, name: String, vendor: String, quantization: String?, outputParserRegex: String?) {
+        self.repoId = repoId
+        self.type = type
+        self.name = name
+        self.vendor = vendor
+        self.quantization = quantization
+        self.outputParserRegex = outputParserRegex
+    }
 }
-open class Session: SessionProtocol, @unchecked Sendable {
-    fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
+#if compiler(>=6)
+extension ChatModel: Sendable {}
 #endif
-    public struct NoPointer {
-        public init() {}
-    }
 
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
-        self.pointer = pointer
-    }
 
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noPointer: NoPointer) {
-        self.pointer = nil
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_uzu_plus_fn_clone_session(self.pointer, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        guard let pointer = pointer else {
-            return
+extension ChatModel: Equatable, Hashable {
+    public static func ==(lhs: ChatModel, rhs: ChatModel) -> Bool {
+        if lhs.repoId != rhs.repoId {
+            return false
         }
-
-        try! rustCall { uniffi_uzu_plus_fn_free_session(pointer, $0) }
-    }
-
-    
-
-    
-open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws  -> Output  {
-    return try  FfiConverterTypeOutput_lift(try rustCallWithError(FfiConverterTypeError_lift) {
-    uniffi_uzu_plus_fn_method_session_run(self.uniffiClonePointer(),
-        FfiConverterTypeInput_lower(input),
-        FfiConverterTypeRunConfig_lower(config),
-        FfiConverterCallbackInterfaceProgressHandler_lower(progress),$0
-    )
-})
-}
-    
-
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeSession: FfiConverter {
-
-    typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = Session
-
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> Session {
-        return Session(unsafeFromRawPointer: pointer)
-    }
-
-    public static func lower(_ value: Session) -> UnsafeMutableRawPointer {
-        return value.uniffiClonePointer()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Session {
-        let v: UInt64 = try readInt(&buf)
-        // The Rust code won't compile if a pointer won't fit in a UInt64.
-        // We have to go via `UInt` because that's the thing that's the size of a pointer.
-        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
-        if (ptr == nil) {
-            throw UniffiInternalError.unexpectedNullPointer
+        if lhs.type != rhs.type {
+            return false
         }
-        return try lift(ptr!)
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.vendor != rhs.vendor {
+            return false
+        }
+        if lhs.quantization != rhs.quantization {
+            return false
+        }
+        if lhs.outputParserRegex != rhs.outputParserRegex {
+            return false
+        }
+        return true
     }
 
-    public static func write(_ value: Session, into buf: inout [UInt8]) {
-        // This fiddling is because `Int` is the thing that's the same size as a pointer.
-        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
-        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(repoId)
+        hasher.combine(type)
+        hasher.combine(name)
+        hasher.combine(vendor)
+        hasher.combine(quantization)
+        hasher.combine(outputParserRegex)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatModel: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatModel {
+        return
+            try ChatModel(
+                repoId: FfiConverterString.read(from: &buf), 
+                type: FfiConverterTypeModelType.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                vendor: FfiConverterString.read(from: &buf), 
+                quantization: FfiConverterOptionString.read(from: &buf), 
+                outputParserRegex: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChatModel, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.repoId, into: &buf)
+        FfiConverterTypeModelType.write(value.type, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.vendor, into: &buf)
+        FfiConverterOptionString.write(value.quantization, into: &buf)
+        FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
     }
 }
 
@@ -1342,18 +1314,16 @@ public struct FfiConverterTypeSession: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeSession_lift(_ pointer: UnsafeMutableRawPointer) throws -> Session {
-    return try FfiConverterTypeSession.lift(pointer)
+public func FfiConverterTypeChatModel_lift(_ buf: RustBuffer) throws -> ChatModel {
+    return try FfiConverterTypeChatModel.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeSession_lower(_ value: Session) -> UnsafeMutableRawPointer {
-    return FfiConverterTypeSession.lower(value)
+public func FfiConverterTypeChatModel_lower(_ value: ChatModel) -> RustBuffer {
+    return FfiConverterTypeChatModel.lower(value)
 }
-
-
 
 
 public struct ClassificationFeature {
@@ -1423,92 +1393,6 @@ public func FfiConverterTypeClassificationFeature_lift(_ buf: RustBuffer) throws
 #endif
 public func FfiConverterTypeClassificationFeature_lower(_ value: ClassificationFeature) -> RustBuffer {
     return FfiConverterTypeClassificationFeature.lower(value)
-}
-
-
-public struct CloudModel {
-    public var repoId: String
-    public var name: String
-    public var vendor: String
-    public var outputParserRegex: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(repoId: String, name: String, vendor: String, outputParserRegex: String?) {
-        self.repoId = repoId
-        self.name = name
-        self.vendor = vendor
-        self.outputParserRegex = outputParserRegex
-    }
-}
-
-#if compiler(>=6)
-extension CloudModel: Sendable {}
-#endif
-
-
-extension CloudModel: Equatable, Hashable {
-    public static func ==(lhs: CloudModel, rhs: CloudModel) -> Bool {
-        if lhs.repoId != rhs.repoId {
-            return false
-        }
-        if lhs.name != rhs.name {
-            return false
-        }
-        if lhs.vendor != rhs.vendor {
-            return false
-        }
-        if lhs.outputParserRegex != rhs.outputParserRegex {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(repoId)
-        hasher.combine(name)
-        hasher.combine(vendor)
-        hasher.combine(outputParserRegex)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCloudModel: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CloudModel {
-        return
-            try CloudModel(
-                repoId: FfiConverterString.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf), 
-                vendor: FfiConverterString.read(from: &buf), 
-                outputParserRegex: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CloudModel, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.repoId, into: &buf)
-        FfiConverterString.write(value.name, into: &buf)
-        FfiConverterString.write(value.vendor, into: &buf)
-        FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCloudModel_lift(_ buf: RustBuffer) throws -> CloudModel {
-    return try FfiConverterTypeCloudModel.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCloudModel_lower(_ value: CloudModel) -> RustBuffer {
-    return FfiConverterTypeCloudModel.lower(value)
 }
 
 
@@ -1595,132 +1479,6 @@ public func FfiConverterTypeConfig_lift(_ buf: RustBuffer) throws -> Config {
 #endif
 public func FfiConverterTypeConfig_lower(_ value: Config) -> RustBuffer {
     return FfiConverterTypeConfig.lower(value)
-}
-
-
-public struct LocalModel {
-    public var identifier: String
-    public var repoId: String
-    public var family: String
-    public var vendor: String
-    public var name: String
-    public var size: String
-    public var quantization: String?
-    public var outputParserRegex: String?
-    public var state: ModelDownloadState
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(identifier: String, repoId: String, family: String, vendor: String, name: String, size: String, quantization: String?, outputParserRegex: String?, state: ModelDownloadState) {
-        self.identifier = identifier
-        self.repoId = repoId
-        self.family = family
-        self.vendor = vendor
-        self.name = name
-        self.size = size
-        self.quantization = quantization
-        self.outputParserRegex = outputParserRegex
-        self.state = state
-    }
-}
-
-#if compiler(>=6)
-extension LocalModel: Sendable {}
-#endif
-
-
-extension LocalModel: Equatable, Hashable {
-    public static func ==(lhs: LocalModel, rhs: LocalModel) -> Bool {
-        if lhs.identifier != rhs.identifier {
-            return false
-        }
-        if lhs.repoId != rhs.repoId {
-            return false
-        }
-        if lhs.family != rhs.family {
-            return false
-        }
-        if lhs.vendor != rhs.vendor {
-            return false
-        }
-        if lhs.name != rhs.name {
-            return false
-        }
-        if lhs.size != rhs.size {
-            return false
-        }
-        if lhs.quantization != rhs.quantization {
-            return false
-        }
-        if lhs.outputParserRegex != rhs.outputParserRegex {
-            return false
-        }
-        if lhs.state != rhs.state {
-            return false
-        }
-        return true
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(identifier)
-        hasher.combine(repoId)
-        hasher.combine(family)
-        hasher.combine(vendor)
-        hasher.combine(name)
-        hasher.combine(size)
-        hasher.combine(quantization)
-        hasher.combine(outputParserRegex)
-        hasher.combine(state)
-    }
-}
-
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeLocalModel: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalModel {
-        return
-            try LocalModel(
-                identifier: FfiConverterString.read(from: &buf), 
-                repoId: FfiConverterString.read(from: &buf), 
-                family: FfiConverterString.read(from: &buf), 
-                vendor: FfiConverterString.read(from: &buf), 
-                name: FfiConverterString.read(from: &buf), 
-                size: FfiConverterString.read(from: &buf), 
-                quantization: FfiConverterOptionString.read(from: &buf), 
-                outputParserRegex: FfiConverterOptionString.read(from: &buf), 
-                state: FfiConverterTypeModelDownloadState.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: LocalModel, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.identifier, into: &buf)
-        FfiConverterString.write(value.repoId, into: &buf)
-        FfiConverterString.write(value.family, into: &buf)
-        FfiConverterString.write(value.vendor, into: &buf)
-        FfiConverterString.write(value.name, into: &buf)
-        FfiConverterString.write(value.size, into: &buf)
-        FfiConverterOptionString.write(value.quantization, into: &buf)
-        FfiConverterOptionString.write(value.outputParserRegex, into: &buf)
-        FfiConverterTypeModelDownloadState.write(value.state, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeLocalModel_lift(_ buf: RustBuffer) throws -> LocalModel {
-    return try FfiConverterTypeLocalModel.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeLocalModel_lower(_ value: LocalModel) -> RustBuffer {
-    return FfiConverterTypeLocalModel.lower(value)
 }
 
 
@@ -2731,6 +2489,8 @@ public enum EngineError: Swift.Error {
     )
     case Network(NetworkError
     )
+    case MutexError
+    case HandlerError
 }
 
 
@@ -2762,6 +2522,8 @@ public struct FfiConverterTypeEngineError: FfiConverterRustBuffer {
         case 5: return .Network(
             try FfiConverterTypeNetworkError.read(from: &buf)
             )
+        case 6: return .MutexError
+        case 7: return .HandlerError
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2798,6 +2560,14 @@ public struct FfiConverterTypeEngineError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(5))
             FfiConverterTypeNetworkError.write(v1, into: &buf)
             
+        
+        case .MutexError:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .HandlerError:
+            writeInt(&buf, Int32(7))
+        
         }
     }
 }
@@ -4252,9 +4022,9 @@ extension StorageError: Equatable, Hashable {}
 /**
  * Callback interface to push cloud models snapshots to the host.
  */
-public protocol CloudModelsHandler: AnyObject, Sendable {
+public protocol ChatModelsHandler: AnyObject, Sendable {
     
-    func onCloudModels(models: [CloudModel]) 
+    func onChatModelsChanged(models: [ChatModel]) 
     
 }
 // Magic number for the Rust proxy to call using the same mechanism as every other method,
@@ -4266,15 +4036,15 @@ private let UNIFFI_CALLBACK_ERROR: Int32 = 1
 private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 // Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceCloudModelsHandler {
+fileprivate struct UniffiCallbackInterfaceChatModelsHandler {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
     //
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
-    static let vtable: [UniffiVTableCallbackInterfaceCloudModelsHandler] = [UniffiVTableCallbackInterfaceCloudModelsHandler(
-        onCloudModels: { (
+    static let vtable: [UniffiVTableCallbackInterfaceChatModelsHandler] = [UniffiVTableCallbackInterfaceChatModelsHandler(
+        onChatModelsChanged: { (
             uniffiHandle: UInt64,
             models: RustBuffer,
             uniffiOutReturn: UnsafeMutableRawPointer,
@@ -4282,11 +4052,11 @@ fileprivate struct UniffiCallbackInterfaceCloudModelsHandler {
         ) in
             let makeCall = {
                 () throws -> () in
-                guard let uniffiObj = try? FfiConverterCallbackInterfaceCloudModelsHandler.handleMap.get(handle: uniffiHandle) else {
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceChatModelsHandler.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return uniffiObj.onCloudModels(
-                     models: try FfiConverterSequenceTypeCloudModel.lift(models)
+                return uniffiObj.onChatModelsChanged(
+                     models: try FfiConverterSequenceTypeChatModel.lift(models)
                 )
             }
 
@@ -4299,31 +4069,31 @@ fileprivate struct UniffiCallbackInterfaceCloudModelsHandler {
             )
         },
         uniffiFree: { (uniffiHandle: UInt64) -> () in
-            let result = try? FfiConverterCallbackInterfaceCloudModelsHandler.handleMap.remove(handle: uniffiHandle)
+            let result = try? FfiConverterCallbackInterfaceChatModelsHandler.handleMap.remove(handle: uniffiHandle)
             if result == nil {
-                print("Uniffi callback interface CloudModelsHandler: handle missing in uniffiFree")
+                print("Uniffi callback interface ChatModelsHandler: handle missing in uniffiFree")
             }
         }
     )]
 }
 
-private func uniffiCallbackInitCloudModelsHandler() {
-    uniffi_uzu_plus_fn_init_callback_vtable_cloudmodelshandler(UniffiCallbackInterfaceCloudModelsHandler.vtable)
+private func uniffiCallbackInitChatModelsHandler() {
+    uniffi_uzu_plus_fn_init_callback_vtable_chatmodelshandler(UniffiCallbackInterfaceChatModelsHandler.vtable)
 }
 
 // FfiConverter protocol for callback interfaces
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterCallbackInterfaceCloudModelsHandler {
-    fileprivate static let handleMap = UniffiHandleMap<CloudModelsHandler>()
+fileprivate struct FfiConverterCallbackInterfaceChatModelsHandler {
+    fileprivate static let handleMap = UniffiHandleMap<ChatModelsHandler>()
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-extension FfiConverterCallbackInterfaceCloudModelsHandler : FfiConverter {
-    typealias SwiftType = CloudModelsHandler
+extension FfiConverterCallbackInterfaceChatModelsHandler : FfiConverter {
+    typealias SwiftType = ChatModelsHandler
     typealias FfiType = UInt64
 
 #if swift(>=5.8)
@@ -4360,15 +4130,15 @@ extension FfiConverterCallbackInterfaceCloudModelsHandler : FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterCallbackInterfaceCloudModelsHandler_lift(_ handle: UInt64) throws -> CloudModelsHandler {
-    return try FfiConverterCallbackInterfaceCloudModelsHandler.lift(handle)
+public func FfiConverterCallbackInterfaceChatModelsHandler_lift(_ handle: UInt64) throws -> ChatModelsHandler {
+    return try FfiConverterCallbackInterfaceChatModelsHandler.lift(handle)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterCallbackInterfaceCloudModelsHandler_lower(_ v: CloudModelsHandler) -> UInt64 {
-    return FfiConverterCallbackInterfaceCloudModelsHandler.lower(v)
+public func FfiConverterCallbackInterfaceChatModelsHandler_lower(_ v: ChatModelsHandler) -> UInt64 {
+    return FfiConverterCallbackInterfaceChatModelsHandler.lower(v)
 }
 
 
@@ -4379,7 +4149,7 @@ public func FfiConverterCallbackInterfaceCloudModelsHandler_lower(_ v: CloudMode
  */
 public protocol LicenseStatusHandler: AnyObject, Sendable {
     
-    func onStatus(status: LicenseStatus) 
+    func onLicenseStatusChanged(status: LicenseStatus) 
     
 }
 
@@ -4393,7 +4163,7 @@ fileprivate struct UniffiCallbackInterfaceLicenseStatusHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceLicenseStatusHandler] = [UniffiVTableCallbackInterfaceLicenseStatusHandler(
-        onStatus: { (
+        onLicenseStatusChanged: { (
             uniffiHandle: UInt64,
             status: RustBuffer,
             uniffiOutReturn: UnsafeMutableRawPointer,
@@ -4404,7 +4174,7 @@ fileprivate struct UniffiCallbackInterfaceLicenseStatusHandler {
                 guard let uniffiObj = try? FfiConverterCallbackInterfaceLicenseStatusHandler.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return uniffiObj.onStatus(
+                return uniffiObj.onLicenseStatusChanged(
                      status: try FfiConverterTypeLicenseStatus_lift(status)
                 )
             }
@@ -4496,35 +4266,37 @@ public func FfiConverterCallbackInterfaceLicenseStatusHandler_lower(_ v: License
 /**
  * Callback interface Swift implements to react to state changes.
  */
-public protocol ModelStateHandler: AnyObject, Sendable {
+public protocol ModelDownloadStateHandler: AnyObject, Sendable {
     
-    func onLocalModel(model: LocalModel) 
+    func onModelDownloadStateChanged(repoId: String, state: ModelDownloadState) 
     
 }
 
 
 // Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceModelStateHandler {
+fileprivate struct UniffiCallbackInterfaceModelDownloadStateHandler {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
     //
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
-    static let vtable: [UniffiVTableCallbackInterfaceModelStateHandler] = [UniffiVTableCallbackInterfaceModelStateHandler(
-        onLocalModel: { (
+    static let vtable: [UniffiVTableCallbackInterfaceModelDownloadStateHandler] = [UniffiVTableCallbackInterfaceModelDownloadStateHandler(
+        onModelDownloadStateChanged: { (
             uniffiHandle: UInt64,
-            model: RustBuffer,
+            repoId: RustBuffer,
+            state: RustBuffer,
             uniffiOutReturn: UnsafeMutableRawPointer,
             uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
         ) in
             let makeCall = {
                 () throws -> () in
-                guard let uniffiObj = try? FfiConverterCallbackInterfaceModelStateHandler.handleMap.get(handle: uniffiHandle) else {
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceModelDownloadStateHandler.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return uniffiObj.onLocalModel(
-                     model: try FfiConverterTypeLocalModel_lift(model)
+                return uniffiObj.onModelDownloadStateChanged(
+                     repoId: try FfiConverterString.lift(repoId),
+                     state: try FfiConverterTypeModelDownloadState_lift(state)
                 )
             }
 
@@ -4537,31 +4309,31 @@ fileprivate struct UniffiCallbackInterfaceModelStateHandler {
             )
         },
         uniffiFree: { (uniffiHandle: UInt64) -> () in
-            let result = try? FfiConverterCallbackInterfaceModelStateHandler.handleMap.remove(handle: uniffiHandle)
+            let result = try? FfiConverterCallbackInterfaceModelDownloadStateHandler.handleMap.remove(handle: uniffiHandle)
             if result == nil {
-                print("Uniffi callback interface ModelStateHandler: handle missing in uniffiFree")
+                print("Uniffi callback interface ModelDownloadStateHandler: handle missing in uniffiFree")
             }
         }
     )]
 }
 
-private func uniffiCallbackInitModelStateHandler() {
-    uniffi_uzu_plus_fn_init_callback_vtable_modelstatehandler(UniffiCallbackInterfaceModelStateHandler.vtable)
+private func uniffiCallbackInitModelDownloadStateHandler() {
+    uniffi_uzu_plus_fn_init_callback_vtable_modeldownloadstatehandler(UniffiCallbackInterfaceModelDownloadStateHandler.vtable)
 }
 
 // FfiConverter protocol for callback interfaces
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterCallbackInterfaceModelStateHandler {
-    fileprivate static let handleMap = UniffiHandleMap<ModelStateHandler>()
+fileprivate struct FfiConverterCallbackInterfaceModelDownloadStateHandler {
+    fileprivate static let handleMap = UniffiHandleMap<ModelDownloadStateHandler>()
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-extension FfiConverterCallbackInterfaceModelStateHandler : FfiConverter {
-    typealias SwiftType = ModelStateHandler
+extension FfiConverterCallbackInterfaceModelDownloadStateHandler : FfiConverter {
+    typealias SwiftType = ModelDownloadStateHandler
     typealias FfiType = UInt64
 
 #if swift(>=5.8)
@@ -4598,15 +4370,15 @@ extension FfiConverterCallbackInterfaceModelStateHandler : FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterCallbackInterfaceModelStateHandler_lift(_ handle: UInt64) throws -> ModelStateHandler {
-    return try FfiConverterCallbackInterfaceModelStateHandler.lift(handle)
+public func FfiConverterCallbackInterfaceModelDownloadStateHandler_lift(_ handle: UInt64) throws -> ModelDownloadStateHandler {
+    return try FfiConverterCallbackInterfaceModelDownloadStateHandler.lift(handle)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterCallbackInterfaceModelStateHandler_lower(_ v: ModelStateHandler) -> UInt64 {
-    return FfiConverterCallbackInterfaceModelStateHandler.lower(v)
+public func FfiConverterCallbackInterfaceModelDownloadStateHandler_lower(_ v: ModelDownloadStateHandler) -> UInt64 {
+    return FfiConverterCallbackInterfaceModelDownloadStateHandler.lower(v)
 }
 
 
@@ -4872,8 +4644,8 @@ fileprivate struct FfiConverterOptionTypeFinishReason: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionCallbackInterfaceCloudModelsHandler: FfiConverterRustBuffer {
-    typealias SwiftType = CloudModelsHandler?
+fileprivate struct FfiConverterOptionCallbackInterfaceChatModelsHandler: FfiConverterRustBuffer {
+    typealias SwiftType = ChatModelsHandler?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -4881,13 +4653,13 @@ fileprivate struct FfiConverterOptionCallbackInterfaceCloudModelsHandler: FfiCon
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterCallbackInterfaceCloudModelsHandler.write(value, into: &buf)
+        FfiConverterCallbackInterfaceChatModelsHandler.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterCallbackInterfaceCloudModelsHandler.read(from: &buf)
+        case 1: return try FfiConverterCallbackInterfaceChatModelsHandler.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -4920,8 +4692,8 @@ fileprivate struct FfiConverterOptionCallbackInterfaceLicenseStatusHandler: FfiC
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionCallbackInterfaceModelStateHandler: FfiConverterRustBuffer {
-    typealias SwiftType = ModelStateHandler?
+fileprivate struct FfiConverterOptionCallbackInterfaceModelDownloadStateHandler: FfiConverterRustBuffer {
+    typealias SwiftType = ModelDownloadStateHandler?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -4929,13 +4701,13 @@ fileprivate struct FfiConverterOptionCallbackInterfaceModelStateHandler: FfiConv
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterCallbackInterfaceModelStateHandler.write(value, into: &buf)
+        FfiConverterCallbackInterfaceModelDownloadStateHandler.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterCallbackInterfaceModelStateHandler.read(from: &buf)
+        case 1: return try FfiConverterCallbackInterfaceModelDownloadStateHandler.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -4969,48 +4741,23 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeCloudModel: FfiConverterRustBuffer {
-    typealias SwiftType = [CloudModel]
+fileprivate struct FfiConverterSequenceTypeChatModel: FfiConverterRustBuffer {
+    typealias SwiftType = [ChatModel]
 
-    public static func write(_ value: [CloudModel], into buf: inout [UInt8]) {
+    public static func write(_ value: [ChatModel], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeCloudModel.write(item, into: &buf)
+            FfiConverterTypeChatModel.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CloudModel] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChatModel] {
         let len: Int32 = try readInt(&buf)
-        var seq = [CloudModel]()
+        var seq = [ChatModel]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeCloudModel.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeLocalModel: FfiConverterRustBuffer {
-    typealias SwiftType = [LocalModel]
-
-    public static func write(_ value: [LocalModel], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeLocalModel.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalModel] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [LocalModel]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeLocalModel.read(from: &buf))
+            seq.append(try FfiConverterTypeChatModel.read(from: &buf))
         }
         return seq
     }
@@ -5036,6 +4783,31 @@ fileprivate struct FfiConverterSequenceTypeMessage: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeModelType: FfiConverterRustBuffer {
+    typealias SwiftType = [ModelType]
+
+    public static func write(_ value: [ModelType], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeModelType.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ModelType] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ModelType]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeModelType.read(from: &buf))
         }
         return seq
     }
@@ -5112,46 +4884,31 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_func_error_user_description() != 33340) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_uzu_plus_checksum_method_chatsession_run() != 36813) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_uzu_plus_checksum_method_engine_activate() != 42274) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_createsession() != 46301) {
+    if (uniffi_uzu_plus_checksum_method_engine_createchatsession() != 5955) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_delete_model() != 21033) {
+    if (uniffi_uzu_plus_checksum_method_engine_create_model_download_handle() != 58119) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_download_handle() != 57640) {
+    if (uniffi_uzu_plus_checksum_method_engine_get_chat_models() != 36723) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_download_model() != 60375) {
+    if (uniffi_uzu_plus_checksum_method_engine_get_model_download_state() != 64186) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_fetch_cloud_models() != 34214) {
+    if (uniffi_uzu_plus_checksum_method_engine_registerchatmodelshandler() != 51961) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_get_cloud_models() != 24823) {
+    if (uniffi_uzu_plus_checksum_method_engine_registerlicensestatushandler() != 20010) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_engine_get_local_models() != 11177) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_get_state() != 15438) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_model_id_by_repo_id() != 24900) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_pause_model() != 13242) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_registercloudmodelshandler() != 59789) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_registerlicensestatushandler() != 52627) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_uzu_plus_checksum_method_engine_registermodelstatehandler() != 54683) {
+    if (uniffi_uzu_plus_checksum_method_engine_registermodeldownloadstatehandler() != 50765) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_modeldownloadhandle_delete() != 1956) {
@@ -5175,28 +4932,25 @@ private let initializationResult: InitializationResult = {
     if (uniffi_uzu_plus_checksum_method_progressstream_next() != 52954) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_session_run() != 25066) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_uzu_plus_checksum_constructor_engine_make() != 13877) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_cloudmodelshandler_on_cloud_models() != 52474) {
+    if (uniffi_uzu_plus_checksum_method_chatmodelshandler_on_chat_models_changed() != 53844) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_licensestatushandler_on_status() != 36495) {
+    if (uniffi_uzu_plus_checksum_method_licensestatushandler_on_license_status_changed() != 47295) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_uzu_plus_checksum_method_modelstatehandler_on_local_model() != 56178) {
+    if (uniffi_uzu_plus_checksum_method_modeldownloadstatehandler_on_model_download_state_changed() != 55543) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_progresshandler_on_progress() != 19494) {
         return InitializationResult.apiChecksumMismatch
     }
 
-    uniffiCallbackInitCloudModelsHandler()
+    uniffiCallbackInitChatModelsHandler()
     uniffiCallbackInitLicenseStatusHandler()
-    uniffiCallbackInitModelStateHandler()
+    uniffiCallbackInitModelDownloadStateHandler()
     uniffiCallbackInitProgressHandler()
     return InitializationResult.ok
 }()

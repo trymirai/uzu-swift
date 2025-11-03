@@ -1,31 +1,13 @@
 import Foundation
 import Uzu
 
-@MainActor public func runChat() async throws {
-    let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: "API_KEY")
+public func runChat() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-    guard status == .activated || status == .gracePeriodActive else {
-        return
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
     }
-
-    let repoId = "Qwen/Qwen3-0.6B"
-
-    let modelDownloadState = engine.downloadState(repoId: repoId)
-    if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(repoId: repoId)
-        try await handle.download()
-        let progressStream = handle.progress()
-        while let progressUpdate = await progressStream.next() {
-            print("Progress: \(progressUpdate.progress)")
-        }
-    }
-
-    let session = try engine.createSession(
-        repoId,
-        modelType: .local,
-        config: Config(preset: .general)
-    )
 
     let messages = [
         Message(role: .system, content: "You are a helpful assistant."),
@@ -33,15 +15,15 @@ import Uzu
     ]
     let input: Input = .messages(messages: messages)
 
+    let session = try engine.chatSession(model)
     let runConfig = RunConfig()
         .tokensLimit(1024)
-
     let output = try session.run(
         input: input,
         config: runConfig
     ) { _ in
         return true
     }
-
+    
     print(output.text.original)
 }

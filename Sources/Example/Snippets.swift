@@ -1,38 +1,44 @@
 import Foundation
 import Uzu
 
-@MainActor public func exampleChat() async throws {
-    // snippet:engine-create
-    let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: "API_KEY")
-    // endsnippet:engine-create
+@MainActor public func exampleQuickStart() async throws {
+    // snippet:quick-start
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-    guard status == .activated || status == .gracePeriodActive else {
-        return
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
     }
 
+    let session = try engine.chatSession(model)
+    let output = try session.run(
+        input: .text(text: "Tell me a short, funny story about a robot"),
+        config: RunConfig()
+    ) { _ in
+        return true
+    }
+    // endsnippet:quick-start
+
+    print(output.text.original)
+}
+
+@MainActor public func exampleChat() async throws {
+    // snippet:engine-create
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
+    // endsnippet:engine-create
+
     // snippet:model-choose
-    let repoId = "Qwen/Qwen3-0.6B"
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
     // endsnippet:model-choose
 
     // snippet:model-download
-    let modelDownloadState = engine.downloadState(repoId: repoId)
-    if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(repoId: repoId)
-        try await handle.download()
-        let progressStream = handle.progress()
-        while let progressUpdate = await progressStream.next() {
-            print("Progress: \(progressUpdate.progress)")
-        }
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
     }
     // endsnippet:model-download
 
     // snippet:session-create-general
-    let session = try engine.createSession(
-        repoId,
-        modelType: .local,
-        config: Config(preset: .general)
-    )
+    let session = try engine.chatSession(model, config: Config(preset: .general))
     // endsnippet:session-create-general
 
     // snippet:session-input-general
@@ -59,30 +65,15 @@ import Uzu
 }
 
 @MainActor public func exampleSummarization() async throws {
-    let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: "API_KEY")
-    guard status == .activated || status == .gracePeriodActive else {
-        return
-    }
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-    let repoId = "Qwen/Qwen3-0.6B"
-
-    let modelDownloadState = engine.downloadState(repoId: repoId)
-    if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(repoId: repoId)
-        try await handle.download()
-        let progressStream = handle.progress()
-        while let progressUpdate = await progressStream.next() {
-            print("Progress: \(progressUpdate.progress)")
-        }
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
     }
 
     // snippet:session-create-summarization
-    let session = try engine.createSession(
-        repoId,
-        modelType: .local,
-        config: Config(preset: .summarization)
-    )
+    let session = try engine.chatSession(model, config: Config(preset: .summarization))
     // endsnippet:session-create-summarization
 
     // snippet:session-input-summarization
@@ -114,22 +105,11 @@ import Uzu
 }
 
 @MainActor public func exampleClassification() async throws {
-    let engine = UzuEngine()
-    let status = try await engine.activate(apiKey: "API_KEY")
-    guard status == .activated || status == .gracePeriodActive else {
-        return
-    }
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-    let repoId = "Qwen/Qwen3-0.6B"
-
-    let modelDownloadState = engine.downloadState(repoId: repoId)
-    if modelDownloadState?.phase != .downloaded {
-        let handle = try engine.downloadHandle(repoId: repoId)
-        try await handle.download()
-        let progressStream = handle.progress()
-        while let progressUpdate = await progressStream.next() {
-            print("Progress: \(progressUpdate.progress)")
-        }
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
     }
 
     // snippet:session-create-classification
@@ -139,7 +119,7 @@ import Uzu
     )
     let config = Config(preset: .classification(feature: feature))
 
-    let session = try engine.createSession(repoId, modelType: .local, config: config)
+    let session = try engine.chatSession(model, config: config)
     // endsnippet:session-create-classification
 
     // snippet:session-input-classification
@@ -169,6 +149,7 @@ import Uzu
 }
 
 @MainActor public func runSnippets() async throws {
+    try await exampleQuickStart()
     try await exampleChat()
     try await exampleSummarization()
     try await exampleClassification()
