@@ -27,7 +27,7 @@ Add the `uzu` dependency to your project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.43")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.44")
 ]
 ```
 
@@ -211,7 +211,9 @@ public func runCloud() async throws {
 }
 ```
 
-> To get access to cloud inference, please contact us via [Discord](https://discord.gg/gUhyn6Rb7x) or [email](mailto:contact@getmirai.co).
+## Troubleshooting
+
+If you experience any problems, please contact us via [Discord](https://discord.com/invite/trymirai) or [email](mailto:contact@getmirai.co).
 
 ## License
 
