@@ -1,4 +1,3 @@
-import Foundation
 import Uzu
 
 public func runClassification() async throws {

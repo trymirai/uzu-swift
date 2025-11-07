@@ -1398,16 +1398,18 @@ public func FfiConverterTypeClassificationFeature_lower(_ value: ClassificationF
 
 public struct Config {
     public var preset: Preset
-    public var prefillStepSize: PrefillStepSize
+    public var contextMode: ContextMode
     public var contextLength: ContextLength
+    public var prefillStepSize: PrefillStepSize
     public var samplingSeed: SamplingSeed
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(preset: Preset, prefillStepSize: PrefillStepSize, contextLength: ContextLength, samplingSeed: SamplingSeed) {
+    public init(preset: Preset, contextMode: ContextMode, contextLength: ContextLength, prefillStepSize: PrefillStepSize, samplingSeed: SamplingSeed) {
         self.preset = preset
-        self.prefillStepSize = prefillStepSize
+        self.contextMode = contextMode
         self.contextLength = contextLength
+        self.prefillStepSize = prefillStepSize
         self.samplingSeed = samplingSeed
     }
 }
@@ -1422,10 +1424,13 @@ extension Config: Equatable, Hashable {
         if lhs.preset != rhs.preset {
             return false
         }
-        if lhs.prefillStepSize != rhs.prefillStepSize {
+        if lhs.contextMode != rhs.contextMode {
             return false
         }
         if lhs.contextLength != rhs.contextLength {
+            return false
+        }
+        if lhs.prefillStepSize != rhs.prefillStepSize {
             return false
         }
         if lhs.samplingSeed != rhs.samplingSeed {
@@ -1436,8 +1441,9 @@ extension Config: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(preset)
-        hasher.combine(prefillStepSize)
+        hasher.combine(contextMode)
         hasher.combine(contextLength)
+        hasher.combine(prefillStepSize)
         hasher.combine(samplingSeed)
     }
 }
@@ -1452,16 +1458,18 @@ public struct FfiConverterTypeConfig: FfiConverterRustBuffer {
         return
             try Config(
                 preset: FfiConverterTypePreset.read(from: &buf), 
-                prefillStepSize: FfiConverterTypePrefillStepSize.read(from: &buf), 
+                contextMode: FfiConverterTypeContextMode.read(from: &buf), 
                 contextLength: FfiConverterTypeContextLength.read(from: &buf), 
+                prefillStepSize: FfiConverterTypePrefillStepSize.read(from: &buf), 
                 samplingSeed: FfiConverterTypeSamplingSeed.read(from: &buf)
         )
     }
 
     public static func write(_ value: Config, into buf: inout [UInt8]) {
         FfiConverterTypePreset.write(value.preset, into: &buf)
-        FfiConverterTypePrefillStepSize.write(value.prefillStepSize, into: &buf)
+        FfiConverterTypeContextMode.write(value.contextMode, into: &buf)
         FfiConverterTypeContextLength.write(value.contextLength, into: &buf)
+        FfiConverterTypePrefillStepSize.write(value.prefillStepSize, into: &buf)
         FfiConverterTypeSamplingSeed.write(value.samplingSeed, into: &buf)
     }
 }
@@ -2474,6 +2482,83 @@ extension ContextLength: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ContextMode {
+    
+    case none
+    case `static`(input: Input
+    )
+    case dynamic
+}
+
+
+#if compiler(>=6)
+extension ContextMode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeContextMode: FfiConverterRustBuffer {
+    typealias SwiftType = ContextMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ContextMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .`static`(input: try FfiConverterTypeInput.read(from: &buf)
+        )
+        
+        case 3: return .dynamic
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ContextMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .`static`(input):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeInput.write(input, into: &buf)
+            
+        
+        case .dynamic:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeContextMode_lift(_ buf: RustBuffer) throws -> ContextMode {
+    return try FfiConverterTypeContextMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeContextMode_lower(_ value: ContextMode) -> RustBuffer {
+    return FfiConverterTypeContextMode.lower(value)
+}
+
+
+extension ContextMode: Equatable, Hashable {}
+
+
+
 
 public enum EngineError: Swift.Error {
 
@@ -2617,6 +2702,7 @@ public enum Error: Swift.Error {
     case SamplingFailed
     case UnexpectedCallSequence
     case UnsupportedPreset
+    case UnsupportedContextMode
     case ResponseParseError
     case NetworkError(message: String
     )
@@ -2657,11 +2743,12 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
         case 17: return .SamplingFailed
         case 18: return .UnexpectedCallSequence
         case 19: return .UnsupportedPreset
-        case 20: return .ResponseParseError
-        case 21: return .NetworkError(
+        case 20: return .UnsupportedContextMode
+        case 21: return .ResponseParseError
+        case 22: return .NetworkError(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 22: return .HttpError(
+        case 23: return .HttpError(
             code: try FfiConverterUInt16.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
@@ -2753,17 +2840,21 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(19))
         
         
-        case .ResponseParseError:
+        case .UnsupportedContextMode:
             writeInt(&buf, Int32(20))
         
         
-        case let .NetworkError(message):
+        case .ResponseParseError:
             writeInt(&buf, Int32(21))
+        
+        
+        case let .NetworkError(message):
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .HttpError(code,message):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(23))
             FfiConverterUInt16.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             

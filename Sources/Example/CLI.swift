@@ -11,7 +11,7 @@ struct Example: AsyncParsableCommand {
     )
 
     @Argument(
-        help: "Mode: chat | summarization | classification | quick-start | snippets | cloud",
+        help: "Mode: chat | chat-static-context | chat-dynamic-context | summarization | classification | quick-start | snippets | cloud",
         transform: { $0.lowercased() })
     var mode: String = "chat"
 
@@ -19,6 +19,10 @@ struct Example: AsyncParsableCommand {
         switch mode {
         case "chat":
             try await runChat()
+        case "chat-static-context":
+            try await runChatStaticContext()
+        case "chat-dynamic-context":
+            try await runChatDynamicContext()
         case "summarization":
             try await runSummarization()
         case "classification":

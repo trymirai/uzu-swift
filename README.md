@@ -27,7 +27,7 @@ Add the `uzu` dependency to your project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.44")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.45")
 ]
 ```
 
@@ -58,6 +58,8 @@ Place the `API_KEY` you obtained earlier in the corresponding example file, and 
 
 ```bash
 swift run example chat
+swift run example chat-dynamic-context
+swift run example chat-static-context
 swift run example summarization
 swift run example classification
 swift run example cloud
@@ -68,7 +70,6 @@ swift run example cloud
 In this example, we will download a model and get a reply to a specific list of messages:
 
 ```swift
-import Foundation
 import Uzu
 
 public func runChat() async throws {
@@ -101,12 +102,108 @@ public func runChat() async throws {
 
 Once loaded, the same `ChatSession` can be reused for multiple requests until you drop it. Each model may consume a significant amount of RAM, so it's important to keep only one session loaded at a time. For iOS apps, we recommend adding the [Increased Memory Capability](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.kernel.increased-memory-limit) entitlement to ensure your app can allocate the required memory.
 
+### Chat with dynamic context
+
+In this example, we will use the dynamic `ContextMode`, which automatically maintains a continuous conversation history instead of resetting the context with each new input. Every new message is added to the ongoing chat, allowing the model to remember what has already been said and respond with full context.
+
+```swift
+import Uzu
+
+public func runChatDynamicContext() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
+
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
+
+    let config = Config(preset: .general)
+        .contextMode(.dynamic)
+    let session = try engine.chatSession(model, config: config)
+
+    let requests = [
+        "Tell about London",
+        "Compare with New York",
+        "Compare the population of the two",
+    ]
+    let runConfig = RunConfig()
+        .tokensLimit(1024)
+        .enableThinking(false)
+
+    for request in requests {
+        let output = try session.run(
+            input: .text(text: request),
+            config: runConfig
+        ) { _ in
+            return true
+        }
+
+        print("Request: \(request)")
+        print("Response: \(output.text.original.trimmingCharacters(in: .whitespacesAndNewlines))")
+        print("-------------------------")
+    }
+}
+```
+
+### Chat with static context
+
+In this example, we will use the static `ContextMode`, which begins with an initial list of messages defining the base context of the conversation, such as predefined instructions. Unlike dynamic mode, this context is fixed and does not evolve with new messages. Each inference request is processed independently, using only the initial context and the latest input, without retaining any previous conversation history.
+
+```swift
+import Uzu
+
+func listToString(_ list: [String]) -> String {
+    "[" + list.map({ "\"\($0)\"" }).joined(separator: ", ") + "]"
+}
+
+public func runChatStaticContext() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
+
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
+
+    let instructions =
+        """
+        Your task is to name countries for each city in the given list.
+        For example for \(listToString(["Helsenki", "Stockholm", "Barcelona"])) the answer should be \(listToString(["Finland", "Sweden", "Spain"])).
+        """
+    let config = Config(preset: .general)
+        .contextMode(
+            .static(
+                input: .messages(messages: [Message(role: .system, content: instructions)])
+            )
+        )
+    let session = try engine.chatSession(model, config: config)
+
+    let requests = [
+        listToString(["New York", "London", "Lisbon", "Paris", "Berlin"]),
+        listToString(["Bangkok", "Tokyo", "Seoul", "Beijing", "Delhi"]),
+    ]
+    let runConfig = RunConfig()
+        .enableThinking(false)
+
+    for request in requests {
+        let output = try session.run(
+            input: .text(text: request),
+            config: runConfig
+        ) { _ in
+            return true
+        }
+
+        print("Request: \(request)")
+        print("Response: \(output.text.original.trimmingCharacters(in: .whitespacesAndNewlines))")
+        print("-------------------------")
+    }
+}
+```
+
 ### Summarization
 
 In this example, we will use the `summarization` preset to generate a summary of the input text:
 
 ```swift
-import Foundation
 import Uzu
 
 public func runSummarization() async throws {
@@ -149,7 +246,6 @@ You will notice that the model’s run count is lower than the actual number of 
 In this example, we will use the `classification` preset to determine the sentiment of the user's input:
 
 ```swift
-import Foundation
 import Uzu
 
 public func runClassification() async throws {

@@ -1,4 +1,3 @@
-import Foundation
 import Uzu
 
 @MainActor public func exampleQuickStart() async throws {

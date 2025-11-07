@@ -2,18 +2,24 @@ import uzu_plusFFI
 
 extension Config {
     public init(preset: Preset) {
-        self.init(preset: preset, prefillStepSize: .default, contextLength: .default, samplingSeed: .default)
+        self.init(preset: preset, contextMode: .none, contextLength: .default, prefillStepSize: .default, samplingSeed: .default)
     }
 
-    public func prefillStepSize(_ prefillStepSize: PrefillStepSize) -> Self {
+    public func contextMode(_ contextMode: ContextMode) -> Self {
         var result = self;
-        result.prefillStepSize = prefillStepSize;
+        result.contextMode = contextMode;
         return result;
     }
 
     public func contextLength(_ contextLength: ContextLength) -> Self {
         var result = self;
         result.contextLength = contextLength;
+        return result;
+    }
+
+    public func prefillStepSize(_ prefillStepSize: PrefillStepSize) -> Self {
+        var result = self;
+        result.prefillStepSize = prefillStepSize;
         return result;
     }
 
