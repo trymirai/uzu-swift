@@ -547,6 +547,8 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol ChatSessionProtocol: AnyObject, Sendable {
     
+    func reset() throws 
+    
     func run(input: Input, config: RunConfig, progress: ProgressHandler) throws  -> Output
     
 }
@@ -601,6 +603,12 @@ open class ChatSession: ChatSessionProtocol, @unchecked Sendable {
 
     
 
+    
+open func reset()throws   {try rustCallWithError(FfiConverterTypeError_lift) {
+    uniffi_uzu_plus_fn_method_chatsession_reset(self.uniffiClonePointer(),$0
+    )
+}
+}
     
 open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws  -> Output  {
     return try  FfiConverterTypeOutput_lift(try rustCallWithError(FfiConverterTypeError_lift) {
@@ -2683,6 +2691,7 @@ public enum Error: Swift.Error {
 
     
     
+    case MutexError
     case ModelFolderNotFound
     case UnableToCreateMetalContext
     case UnableToLoadConfig
@@ -2724,31 +2733,32 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
         
 
         
-        case 1: return .ModelFolderNotFound
-        case 2: return .UnableToCreateMetalContext
-        case 3: return .UnableToLoadConfig
-        case 4: return .UnableToLoadWeights
-        case 5: return .UnableToLoadTokenizer
-        case 6: return .NotEnoughMemory
-        case 7: return .GeneratorNotLoaded
-        case 8: return .UnableToLoadPromptTemplate
-        case 9: return .UnableToRenderPromptTemplate
-        case 10: return .UnexpectedReasoningContent
-        case 11: return .UnableToBuildOutputParserRegex
-        case 12: return .UnableToEncodeText
-        case 13: return .UnableToDecodeText
-        case 14: return .ContextLengthExceeded
-        case 15: return .PrefillFailed
-        case 16: return .GenerateFailed
-        case 17: return .SamplingFailed
-        case 18: return .UnexpectedCallSequence
-        case 19: return .UnsupportedPreset
-        case 20: return .UnsupportedContextMode
-        case 21: return .ResponseParseError
-        case 22: return .NetworkError(
+        case 1: return .MutexError
+        case 2: return .ModelFolderNotFound
+        case 3: return .UnableToCreateMetalContext
+        case 4: return .UnableToLoadConfig
+        case 5: return .UnableToLoadWeights
+        case 6: return .UnableToLoadTokenizer
+        case 7: return .NotEnoughMemory
+        case 8: return .GeneratorNotLoaded
+        case 9: return .UnableToLoadPromptTemplate
+        case 10: return .UnableToRenderPromptTemplate
+        case 11: return .UnexpectedReasoningContent
+        case 12: return .UnableToBuildOutputParserRegex
+        case 13: return .UnableToEncodeText
+        case 14: return .UnableToDecodeText
+        case 15: return .ContextLengthExceeded
+        case 16: return .PrefillFailed
+        case 17: return .GenerateFailed
+        case 18: return .SamplingFailed
+        case 19: return .UnexpectedCallSequence
+        case 20: return .UnsupportedPreset
+        case 21: return .UnsupportedContextMode
+        case 22: return .ResponseParseError
+        case 23: return .NetworkError(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 23: return .HttpError(
+        case 24: return .HttpError(
             code: try FfiConverterUInt16.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
@@ -2764,97 +2774,101 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
 
         
         
-        case .ModelFolderNotFound:
+        case .MutexError:
             writeInt(&buf, Int32(1))
         
         
-        case .UnableToCreateMetalContext:
+        case .ModelFolderNotFound:
             writeInt(&buf, Int32(2))
         
         
-        case .UnableToLoadConfig:
+        case .UnableToCreateMetalContext:
             writeInt(&buf, Int32(3))
         
         
-        case .UnableToLoadWeights:
+        case .UnableToLoadConfig:
             writeInt(&buf, Int32(4))
         
         
-        case .UnableToLoadTokenizer:
+        case .UnableToLoadWeights:
             writeInt(&buf, Int32(5))
         
         
-        case .NotEnoughMemory:
+        case .UnableToLoadTokenizer:
             writeInt(&buf, Int32(6))
         
         
-        case .GeneratorNotLoaded:
+        case .NotEnoughMemory:
             writeInt(&buf, Int32(7))
         
         
-        case .UnableToLoadPromptTemplate:
+        case .GeneratorNotLoaded:
             writeInt(&buf, Int32(8))
         
         
-        case .UnableToRenderPromptTemplate:
+        case .UnableToLoadPromptTemplate:
             writeInt(&buf, Int32(9))
         
         
-        case .UnexpectedReasoningContent:
+        case .UnableToRenderPromptTemplate:
             writeInt(&buf, Int32(10))
         
         
-        case .UnableToBuildOutputParserRegex:
+        case .UnexpectedReasoningContent:
             writeInt(&buf, Int32(11))
         
         
-        case .UnableToEncodeText:
+        case .UnableToBuildOutputParserRegex:
             writeInt(&buf, Int32(12))
         
         
-        case .UnableToDecodeText:
+        case .UnableToEncodeText:
             writeInt(&buf, Int32(13))
         
         
-        case .ContextLengthExceeded:
+        case .UnableToDecodeText:
             writeInt(&buf, Int32(14))
         
         
-        case .PrefillFailed:
+        case .ContextLengthExceeded:
             writeInt(&buf, Int32(15))
         
         
-        case .GenerateFailed:
+        case .PrefillFailed:
             writeInt(&buf, Int32(16))
         
         
-        case .SamplingFailed:
+        case .GenerateFailed:
             writeInt(&buf, Int32(17))
         
         
-        case .UnexpectedCallSequence:
+        case .SamplingFailed:
             writeInt(&buf, Int32(18))
         
         
-        case .UnsupportedPreset:
+        case .UnexpectedCallSequence:
             writeInt(&buf, Int32(19))
         
         
-        case .UnsupportedContextMode:
+        case .UnsupportedPreset:
             writeInt(&buf, Int32(20))
         
         
-        case .ResponseParseError:
+        case .UnsupportedContextMode:
             writeInt(&buf, Int32(21))
         
         
-        case let .NetworkError(message):
+        case .ResponseParseError:
             writeInt(&buf, Int32(22))
+        
+        
+        case let .NetworkError(message):
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .HttpError(code,message):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(24))
             FfiConverterUInt16.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
@@ -4973,6 +4987,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_uzu_plus_checksum_func_error_user_description() != 33340) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_chatsession_reset() != 33875) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_chatsession_run() != 36813) {
