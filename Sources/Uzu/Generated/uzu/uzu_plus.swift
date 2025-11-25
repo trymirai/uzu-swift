@@ -2698,6 +2698,7 @@ public enum Error: Swift.Error {
     case UnableToLoadWeights
     case UnableToLoadTokenizer
     case NotEnoughMemory
+    case UnsupportedContextModeForModel
     case GeneratorNotLoaded
     case UnableToLoadPromptTemplate
     case UnableToRenderPromptTemplate
@@ -2740,25 +2741,26 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
         case 5: return .UnableToLoadWeights
         case 6: return .UnableToLoadTokenizer
         case 7: return .NotEnoughMemory
-        case 8: return .GeneratorNotLoaded
-        case 9: return .UnableToLoadPromptTemplate
-        case 10: return .UnableToRenderPromptTemplate
-        case 11: return .UnexpectedReasoningContent
-        case 12: return .UnableToBuildOutputParserRegex
-        case 13: return .UnableToEncodeText
-        case 14: return .UnableToDecodeText
-        case 15: return .ContextLengthExceeded
-        case 16: return .PrefillFailed
-        case 17: return .GenerateFailed
-        case 18: return .SamplingFailed
-        case 19: return .UnexpectedCallSequence
-        case 20: return .UnsupportedPreset
-        case 21: return .UnsupportedContextMode
-        case 22: return .ResponseParseError
-        case 23: return .NetworkError(
+        case 8: return .UnsupportedContextModeForModel
+        case 9: return .GeneratorNotLoaded
+        case 10: return .UnableToLoadPromptTemplate
+        case 11: return .UnableToRenderPromptTemplate
+        case 12: return .UnexpectedReasoningContent
+        case 13: return .UnableToBuildOutputParserRegex
+        case 14: return .UnableToEncodeText
+        case 15: return .UnableToDecodeText
+        case 16: return .ContextLengthExceeded
+        case 17: return .PrefillFailed
+        case 18: return .GenerateFailed
+        case 19: return .SamplingFailed
+        case 20: return .UnexpectedCallSequence
+        case 21: return .UnsupportedPreset
+        case 22: return .UnsupportedContextMode
+        case 23: return .ResponseParseError
+        case 24: return .NetworkError(
             message: try FfiConverterString.read(from: &buf)
             )
-        case 24: return .HttpError(
+        case 25: return .HttpError(
             code: try FfiConverterUInt16.read(from: &buf), 
             message: try FfiConverterString.read(from: &buf)
             )
@@ -2802,73 +2804,77 @@ public struct FfiConverterTypeError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(7))
         
         
-        case .GeneratorNotLoaded:
+        case .UnsupportedContextModeForModel:
             writeInt(&buf, Int32(8))
         
         
-        case .UnableToLoadPromptTemplate:
+        case .GeneratorNotLoaded:
             writeInt(&buf, Int32(9))
         
         
-        case .UnableToRenderPromptTemplate:
+        case .UnableToLoadPromptTemplate:
             writeInt(&buf, Int32(10))
         
         
-        case .UnexpectedReasoningContent:
+        case .UnableToRenderPromptTemplate:
             writeInt(&buf, Int32(11))
         
         
-        case .UnableToBuildOutputParserRegex:
+        case .UnexpectedReasoningContent:
             writeInt(&buf, Int32(12))
         
         
-        case .UnableToEncodeText:
+        case .UnableToBuildOutputParserRegex:
             writeInt(&buf, Int32(13))
         
         
-        case .UnableToDecodeText:
+        case .UnableToEncodeText:
             writeInt(&buf, Int32(14))
         
         
-        case .ContextLengthExceeded:
+        case .UnableToDecodeText:
             writeInt(&buf, Int32(15))
         
         
-        case .PrefillFailed:
+        case .ContextLengthExceeded:
             writeInt(&buf, Int32(16))
         
         
-        case .GenerateFailed:
+        case .PrefillFailed:
             writeInt(&buf, Int32(17))
         
         
-        case .SamplingFailed:
+        case .GenerateFailed:
             writeInt(&buf, Int32(18))
         
         
-        case .UnexpectedCallSequence:
+        case .SamplingFailed:
             writeInt(&buf, Int32(19))
         
         
-        case .UnsupportedPreset:
+        case .UnexpectedCallSequence:
             writeInt(&buf, Int32(20))
         
         
-        case .UnsupportedContextMode:
+        case .UnsupportedPreset:
             writeInt(&buf, Int32(21))
         
         
-        case .ResponseParseError:
+        case .UnsupportedContextMode:
             writeInt(&buf, Int32(22))
         
         
-        case let .NetworkError(message):
+        case .ResponseParseError:
             writeInt(&buf, Int32(23))
+        
+        
+        case let .NetworkError(message):
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(message, into: &buf)
             
         
         case let .HttpError(code,message):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(25))
             FfiConverterUInt16.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
@@ -3808,9 +3814,7 @@ extension Role: Equatable, Hashable {}
 public enum SamplingMethod {
     
     case greedy
-    case temperature(temperature: Double
-    )
-    case topP(topP: Double
+    case stochastic(temperature: Double?, topK: Int64?, topP: Double?
     )
 }
 
@@ -3831,10 +3835,7 @@ public struct FfiConverterTypeSamplingMethod: FfiConverterRustBuffer {
         
         case 1: return .greedy
         
-        case 2: return .temperature(temperature: try FfiConverterDouble.read(from: &buf)
-        )
-        
-        case 3: return .topP(topP: try FfiConverterDouble.read(from: &buf)
+        case 2: return .stochastic(temperature: try FfiConverterOptionDouble.read(from: &buf), topK: try FfiConverterOptionInt64.read(from: &buf), topP: try FfiConverterOptionDouble.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -3849,14 +3850,11 @@ public struct FfiConverterTypeSamplingMethod: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .temperature(temperature):
+        case let .stochastic(temperature,topK,topP):
             writeInt(&buf, Int32(2))
-            FfiConverterDouble.write(temperature, into: &buf)
-            
-        
-        case let .topP(topP):
-            writeInt(&buf, Int32(3))
-            FfiConverterDouble.write(topP, into: &buf)
+            FfiConverterOptionDouble.write(temperature, into: &buf)
+            FfiConverterOptionInt64.write(topK, into: &buf)
+            FfiConverterOptionDouble.write(topP, into: &buf)
             
         }
     }
@@ -4600,6 +4598,30 @@ public func FfiConverterCallbackInterfaceProgressHandler_lift(_ handle: UInt64) 
 #endif
 public func FfiConverterCallbackInterfaceProgressHandler_lower(_ v: ProgressHandler) -> UInt64 {
     return FfiConverterCallbackInterfaceProgressHandler.lower(v)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
 }
 
 #if swift(>=5.8)
