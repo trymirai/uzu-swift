@@ -88,7 +88,7 @@ public final class UzuEngine {
             throw SimulatorError.notSupported
         #endif
         
-        try engine.createChatSession(model: chatModel, config: config)
+        return try engine.createChatSession(model: chatModel, config: config)
     }
 }
 
