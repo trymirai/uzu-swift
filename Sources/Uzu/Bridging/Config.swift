@@ -2,7 +2,7 @@ import uzu_plusFFI
 
 extension Config {
     public init(preset: Preset) {
-        self.init(preset: preset, contextMode: .none, contextLength: .default, prefillStepSize: .default, samplingSeed: .default)
+        self.init(preset: preset, contextMode: .none, contextLength: .default, prefillStepSize: .default, samplingSeed: .default, asyncBatchSize: .default)
     }
 
     public func contextMode(_ contextMode: ContextMode) -> Self {
@@ -26,6 +26,12 @@ extension Config {
     public func samplingSeed(_ samplingSeed: SamplingSeed) -> Self {
         var result = self;
         result.samplingSeed = samplingSeed;
+        return result;
+    }
+
+    public func asyncBatchSize(_ asyncBatchSize: AsyncBatchSize) -> Self {
+        var result = self;
+        result.asyncBatchSize = asyncBatchSize;
         return result;
     }
 }

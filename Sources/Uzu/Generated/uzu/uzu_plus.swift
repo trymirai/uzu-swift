@@ -1410,15 +1410,17 @@ public struct Config {
     public var contextLength: ContextLength
     public var prefillStepSize: PrefillStepSize
     public var samplingSeed: SamplingSeed
+    public var asyncBatchSize: AsyncBatchSize
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(preset: Preset, contextMode: ContextMode, contextLength: ContextLength, prefillStepSize: PrefillStepSize, samplingSeed: SamplingSeed) {
+    public init(preset: Preset, contextMode: ContextMode, contextLength: ContextLength, prefillStepSize: PrefillStepSize, samplingSeed: SamplingSeed, asyncBatchSize: AsyncBatchSize) {
         self.preset = preset
         self.contextMode = contextMode
         self.contextLength = contextLength
         self.prefillStepSize = prefillStepSize
         self.samplingSeed = samplingSeed
+        self.asyncBatchSize = asyncBatchSize
     }
 }
 
@@ -1444,6 +1446,9 @@ extension Config: Equatable, Hashable {
         if lhs.samplingSeed != rhs.samplingSeed {
             return false
         }
+        if lhs.asyncBatchSize != rhs.asyncBatchSize {
+            return false
+        }
         return true
     }
 
@@ -1453,6 +1458,7 @@ extension Config: Equatable, Hashable {
         hasher.combine(contextLength)
         hasher.combine(prefillStepSize)
         hasher.combine(samplingSeed)
+        hasher.combine(asyncBatchSize)
     }
 }
 
@@ -1469,7 +1475,8 @@ public struct FfiConverterTypeConfig: FfiConverterRustBuffer {
                 contextMode: FfiConverterTypeContextMode.read(from: &buf), 
                 contextLength: FfiConverterTypeContextLength.read(from: &buf), 
                 prefillStepSize: FfiConverterTypePrefillStepSize.read(from: &buf), 
-                samplingSeed: FfiConverterTypeSamplingSeed.read(from: &buf)
+                samplingSeed: FfiConverterTypeSamplingSeed.read(from: &buf), 
+                asyncBatchSize: FfiConverterTypeAsyncBatchSize.read(from: &buf)
         )
     }
 
@@ -1479,6 +1486,7 @@ public struct FfiConverterTypeConfig: FfiConverterRustBuffer {
         FfiConverterTypeContextLength.write(value.contextLength, into: &buf)
         FfiConverterTypePrefillStepSize.write(value.prefillStepSize, into: &buf)
         FfiConverterTypeSamplingSeed.write(value.samplingSeed, into: &buf)
+        FfiConverterTypeAsyncBatchSize.write(value.asyncBatchSize, into: &buf)
     }
 }
 
@@ -2412,6 +2420,76 @@ public func FfiConverterTypeTotalStats_lift(_ buf: RustBuffer) throws -> TotalSt
 public func FfiConverterTypeTotalStats_lower(_ value: TotalStats) -> RustBuffer {
     return FfiConverterTypeTotalStats.lower(value)
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum AsyncBatchSize {
+    
+    case `default`
+    case custom(size: Int64
+    )
+}
+
+
+#if compiler(>=6)
+extension AsyncBatchSize: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAsyncBatchSize: FfiConverterRustBuffer {
+    typealias SwiftType = AsyncBatchSize
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AsyncBatchSize {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .`default`
+        
+        case 2: return .custom(size: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AsyncBatchSize, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .`default`:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .custom(size):
+            writeInt(&buf, Int32(2))
+            FfiConverterInt64.write(size, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAsyncBatchSize_lift(_ buf: RustBuffer) throws -> AsyncBatchSize {
+    return try FfiConverterTypeAsyncBatchSize.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAsyncBatchSize_lower(_ value: AsyncBatchSize) -> RustBuffer {
+    return FfiConverterTypeAsyncBatchSize.lower(value)
+}
+
+
+extension AsyncBatchSize: Equatable, Hashable {}
+
+
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
