@@ -4,8 +4,8 @@ import PackageDescription
 let package = Package(
     name: "Uzu",
     platforms: [
-        .iOS("17.0"),
-        .macOS("15.0"),
+        .iOS("26.0"),
+        .macOS("26.0"),
     ],
     products: [
         .library(name: "Uzu", targets: ["Uzu"]),
@@ -17,8 +17,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "uzu",
-            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.50.zip",
-            checksum: "6c73bb8b49ae42421f418aae4e559fbd7372505af1e8e33ed4acdcd21f31242d"
+            url: "https://artifacts.trymirai.com/uzu-swift/releases/0.1.51.zip",
+            checksum: "819898fb22b2f129a6e88a0e7991c04c58346cb979e0cd708c72b6c5fddea5e4"
         ),
         .target(
             name: "Uzu",

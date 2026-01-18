@@ -27,7 +27,7 @@ Add the `uzu` dependency to your project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.50")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.1.51")
 ]
 ```
 
@@ -63,6 +63,7 @@ swift run example chat-static-context
 swift run example summarization
 swift run example classification
 swift run example cloud
+swift run example structured-output
 ```
 
 ### Chat
@@ -304,6 +305,52 @@ public func runCloud() async throws {
         return true
     }
     print(output.text.original)
+}
+```
+
+### Structured Output
+
+Sometimes you want the generated output to be valid JSON with predefined fields. You can use `GrammarConfig` to manually specify a JSON schema, or use a struct annotated with `@Generable` from Apple’s FoundationModels framework.
+
+```swift
+import FoundationModels
+import Uzu
+
+@Generable()
+struct Country: Codable {
+    let name: String
+    let capital: String
+}
+
+public func runStructuredOutput() async throws {
+    let engine = try await UzuEngine.create(apiKey: "API_KEY")
+
+    let model = try await engine.chatModel(repoId: "Qwen/Qwen3-0.6B")
+    try await engine.downloadChatModel(model) { update in
+        print("Progress: \(update.progress)")
+    }
+
+    let input: Input = .text(
+        text:
+            "Give me a JSON object containing a list of 3 countries, where each country has name and capital fields"
+    )
+
+    let session = try engine.chatSession(model)
+    let runConfig = RunConfig()
+        .tokensLimit(1024)
+        .enableThinking(false)
+        .grammarConfig(GrammarConfig.fromType([Country].self))
+    let output = try session.run(
+        input: input,
+        config: runConfig
+    ) { _ in
+        return true
+    }
+
+    guard let countries: [Country] = output.text.parsed.structuredResponse() else {
+        return
+    }
+    print(countries)
 }
 ```
 
