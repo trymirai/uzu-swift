@@ -27,7 +27,7 @@ Add the `uzu` dependency to your project:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.2.0")
+    .package(url: "https://github.com/trymirai/uzu-swift.git", from: "0.2.1")
 ]
 ```
 

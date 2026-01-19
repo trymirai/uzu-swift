@@ -352,29 +352,19 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
-// These ensure that SWIFT handles always have the lowest bit set
-fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
-fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
-
 fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
     // All mutation happens with this lock held, which is why we implement @unchecked Sendable.
     private let lock = NSLock()
     private var map: [UInt64: T] = [:]
-    private var currentHandle: UInt64 = UNIFFI_HANDLEMAP_INITIAL
+    private var currentHandle: UInt64 = 1
 
     func insert(obj: T) -> UInt64 {
         lock.withLock {
-            return doInsert(obj)
+            let handle = currentHandle
+            currentHandle += 1
+            map[handle] = obj
+            return handle
         }
-    }
-
-    // Low-level insert function, this assumes `lock` is held.
-    private func doInsert(_ obj: T) -> UInt64 {
-        let handle = currentHandle
-        currentHandle += UNIFFI_HANDLEMAP_DELTA
-        map[handle] = obj
-        return handle
     }
 
      func get(handle: UInt64) throws -> T {
@@ -383,15 +373,6 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
                 throw UniffiInternalError.unexpectedStaleHandle
             }
             return obj
-        }
-    }
-
-     func clone(handle: UInt64) throws -> UInt64 {
-        try lock.withLock {
-            guard let obj = map[handle] else {
-                throw UniffiInternalError.unexpectedStaleHandle
-            }
-            return doInsert(obj)
         }
     }
 
@@ -414,13 +395,7 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 
 
 // Public interface members begin here.
-// Magic number for the Rust proxy to call using the same mechanism as every other method,
-// to free the callback once it's dropped by Rust.
-private let IDX_CALLBACK_FREE: Int32 = 0
-// Callback return codes
-private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
-private let UNIFFI_CALLBACK_ERROR: Int32 = 1
-private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -578,13 +553,13 @@ public protocol ChatSessionProtocol: AnyObject, Sendable {
     
 }
 open class ChatSession: ChatSessionProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
+    fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public struct NoHandle {
+    public struct NoPointer {
         public init() {}
     }
 
@@ -594,48 +569,50 @@ open class ChatSession: ChatSessionProtocol, @unchecked Sendable {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
     }
 
     // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
     //
     // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
     }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_uzu_plus_fn_clone_chatsession(self.handle, $0) }
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_chatsession(self.pointer, $0) }
     }
     // No primary constructor declared for this class.
 
     deinit {
-        try! rustCall { uniffi_uzu_plus_fn_free_chatsession(handle, $0) }
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_chatsession(pointer, $0) }
     }
 
     
 
     
 open func reset()throws   {try rustCallWithError(FfiConverterTypeError_lift) {
-    uniffi_uzu_plus_fn_method_chatsession_reset(
-            self.uniffiCloneHandle(),$0
+    uniffi_uzu_plus_fn_method_chatsession_reset(self.uniffiClonePointer(),$0
     )
 }
 }
     
 open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws  -> Output  {
     return try  FfiConverterTypeOutput_lift(try rustCallWithError(FfiConverterTypeError_lift) {
-    uniffi_uzu_plus_fn_method_chatsession_run(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_chatsession_run(self.uniffiClonePointer(),
         FfiConverterTypeInput_lower(input),
         FfiConverterTypeRunConfig_lower(config),
         FfiConverterCallbackInterfaceProgressHandler_lower(progress),$0
@@ -644,7 +621,6 @@ open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws 
 }
     
 
-    
 }
 
 
@@ -652,24 +628,33 @@ open func run(input: Input, config: RunConfig, progress: ProgressHandler)throws 
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeChatSession: FfiConverter {
-    typealias FfiType = UInt64
+
+    typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = ChatSession
 
-    public static func lift(_ handle: UInt64) throws -> ChatSession {
-        return ChatSession(unsafeFromHandle: handle)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> ChatSession {
+        return ChatSession(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: ChatSession) -> UInt64 {
-        return value.uniffiCloneHandle()
+    public static func lower(_ value: ChatSession) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatSession {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
     }
 
     public static func write(_ value: ChatSession, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
     }
 }
 
@@ -677,14 +662,14 @@ public struct FfiConverterTypeChatSession: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeChatSession_lift(_ handle: UInt64) throws -> ChatSession {
-    return try FfiConverterTypeChatSession.lift(handle)
+public func FfiConverterTypeChatSession_lift(_ pointer: UnsafeMutableRawPointer) throws -> ChatSession {
+    return try FfiConverterTypeChatSession.lift(pointer)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeChatSession_lower(_ value: ChatSession) -> UInt64 {
+public func FfiConverterTypeChatSession_lower(_ value: ChatSession) -> UnsafeMutableRawPointer {
     return FfiConverterTypeChatSession.lower(value)
 }
 
@@ -713,13 +698,13 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
 }
 open class Engine: EngineProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
+    fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public struct NoHandle {
+    public struct NoPointer {
         public init() {}
     }
 
@@ -729,32 +714,36 @@ open class Engine: EngineProtocol, @unchecked Sendable {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
     }
 
     // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
     //
     // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
     }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_uzu_plus_fn_clone_engine(self.handle, $0) }
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_engine(self.pointer, $0) }
     }
     // No primary constructor declared for this class.
 
     deinit {
-        try! rustCall { uniffi_uzu_plus_fn_free_engine(handle, $0) }
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_engine(pointer, $0) }
     }
 
     
@@ -772,7 +761,7 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_engine_activate(
-                    self.uniffiCloneHandle(),
+                    self.uniffiClonePointer(),
                     FfiConverterString.lower(apiKey)
                 )
             },
@@ -786,8 +775,7 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
     
 open func createChatSession(model: ChatModel, config: Config)throws  -> ChatSession  {
     return try  FfiConverterTypeChatSession_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_createchatsession(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_createchatsession(self.uniffiClonePointer(),
         FfiConverterTypeChatModel_lower(model),
         FfiConverterTypeConfig_lower(config),$0
     )
@@ -796,8 +784,7 @@ open func createChatSession(model: ChatModel, config: Config)throws  -> ChatSess
     
 open func createModelDownloadHandle(repoId: String)throws  -> ModelDownloadHandle  {
     return try  FfiConverterTypeModelDownloadHandle_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_create_model_download_handle(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_create_model_download_handle(self.uniffiClonePointer(),
         FfiConverterString.lower(repoId),$0
     )
 })
@@ -808,7 +795,7 @@ open func getChatModels(types: [ModelType])async throws  -> [ChatModel]  {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_engine_get_chat_models(
-                    self.uniffiCloneHandle(),
+                    self.uniffiClonePointer(),
                     FfiConverterSequenceTypeModelType.lower(types)
                 )
             },
@@ -822,39 +809,34 @@ open func getChatModels(types: [ModelType])async throws  -> [ChatModel]  {
     
 open func getModelDownloadState(repoId: String)throws  -> ModelDownloadState  {
     return try  FfiConverterTypeModelDownloadState_lift(try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_get_model_download_state(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_get_model_download_state(self.uniffiClonePointer(),
         FfiConverterString.lower(repoId),$0
     )
 })
 }
     
 open func registerChatModelsHandler(handler: ChatModelsHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_registerchatmodelshandler(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_registerchatmodelshandler(self.uniffiClonePointer(),
         FfiConverterOptionCallbackInterfaceChatModelsHandler.lower(handler),$0
     )
 }
 }
     
 open func registerLicenseStatusHandler(handler: LicenseStatusHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_registerlicensestatushandler(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_registerlicensestatushandler(self.uniffiClonePointer(),
         FfiConverterOptionCallbackInterfaceLicenseStatusHandler.lower(handler),$0
     )
 }
 }
     
 open func registerModelDownloadStateHandler(handler: ModelDownloadStateHandler?)throws   {try rustCallWithError(FfiConverterTypeEngineError_lift) {
-    uniffi_uzu_plus_fn_method_engine_registermodeldownloadstatehandler(
-            self.uniffiCloneHandle(),
+    uniffi_uzu_plus_fn_method_engine_registermodeldownloadstatehandler(self.uniffiClonePointer(),
         FfiConverterOptionCallbackInterfaceModelDownloadStateHandler.lower(handler),$0
     )
 }
 }
     
 
-    
 }
 
 
@@ -862,24 +844,33 @@ open func registerModelDownloadStateHandler(handler: ModelDownloadStateHandler?)
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeEngine: FfiConverter {
-    typealias FfiType = UInt64
+
+    typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = Engine
 
-    public static func lift(_ handle: UInt64) throws -> Engine {
-        return Engine(unsafeFromHandle: handle)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> Engine {
+        return Engine(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: Engine) -> UInt64 {
-        return value.uniffiCloneHandle()
+    public static func lower(_ value: Engine) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Engine {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
     }
 
     public static func write(_ value: Engine, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
     }
 }
 
@@ -887,14 +878,14 @@ public struct FfiConverterTypeEngine: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEngine_lift(_ handle: UInt64) throws -> Engine {
-    return try FfiConverterTypeEngine.lift(handle)
+public func FfiConverterTypeEngine_lift(_ pointer: UnsafeMutableRawPointer) throws -> Engine {
+    return try FfiConverterTypeEngine.lift(pointer)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeEngine_lower(_ value: Engine) -> UInt64 {
+public func FfiConverterTypeEngine_lower(_ value: Engine) -> UnsafeMutableRawPointer {
     return FfiConverterTypeEngine.lower(value)
 }
 
@@ -919,13 +910,13 @@ public protocol ModelDownloadHandleProtocol: AnyObject, Sendable {
     
 }
 open class ModelDownloadHandle: ModelDownloadHandleProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
+    fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public struct NoHandle {
+    public struct NoPointer {
         public init() {}
     }
 
@@ -935,32 +926,36 @@ open class ModelDownloadHandle: ModelDownloadHandleProtocol, @unchecked Sendable
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
     }
 
     // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
     //
     // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
     }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_uzu_plus_fn_clone_modeldownloadhandle(self.handle, $0) }
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_modeldownloadhandle(self.pointer, $0) }
     }
     // No primary constructor declared for this class.
 
     deinit {
-        try! rustCall { uniffi_uzu_plus_fn_free_modeldownloadhandle(handle, $0) }
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_modeldownloadhandle(pointer, $0) }
     }
 
     
@@ -971,7 +966,7 @@ open func delete()async throws   {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_modeldownloadhandle_delete(
-                    self.uniffiCloneHandle()
+                    self.uniffiClonePointer()
                     
                 )
             },
@@ -988,7 +983,7 @@ open func download()async throws   {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_modeldownloadhandle_download(
-                    self.uniffiCloneHandle()
+                    self.uniffiClonePointer()
                     
                 )
             },
@@ -1002,8 +997,7 @@ open func download()async throws   {
     
 open func identifier() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_uzu_plus_fn_method_modeldownloadhandle_identifier(
-            self.uniffiCloneHandle(),$0
+    uniffi_uzu_plus_fn_method_modeldownloadhandle_identifier(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -1013,7 +1007,7 @@ open func pause()async throws   {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_modeldownloadhandle_pause(
-                    self.uniffiCloneHandle()
+                    self.uniffiClonePointer()
                     
                 )
             },
@@ -1027,8 +1021,7 @@ open func pause()async throws   {
     
 open func progress() -> ProgressStream  {
     return try!  FfiConverterTypeProgressStream_lift(try! rustCall() {
-    uniffi_uzu_plus_fn_method_modeldownloadhandle_progress(
-            self.uniffiCloneHandle(),$0
+    uniffi_uzu_plus_fn_method_modeldownloadhandle_progress(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -1038,7 +1031,7 @@ open func state()async throws  -> ModelDownloadState  {
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_modeldownloadhandle_state(
-                    self.uniffiCloneHandle()
+                    self.uniffiClonePointer()
                     
                 )
             },
@@ -1051,7 +1044,6 @@ open func state()async throws  -> ModelDownloadState  {
 }
     
 
-    
 }
 
 
@@ -1059,24 +1051,33 @@ open func state()async throws  -> ModelDownloadState  {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeModelDownloadHandle: FfiConverter {
-    typealias FfiType = UInt64
+
+    typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = ModelDownloadHandle
 
-    public static func lift(_ handle: UInt64) throws -> ModelDownloadHandle {
-        return ModelDownloadHandle(unsafeFromHandle: handle)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> ModelDownloadHandle {
+        return ModelDownloadHandle(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: ModelDownloadHandle) -> UInt64 {
-        return value.uniffiCloneHandle()
+    public static func lower(_ value: ModelDownloadHandle) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelDownloadHandle {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
     }
 
     public static func write(_ value: ModelDownloadHandle, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
     }
 }
 
@@ -1084,14 +1085,14 @@ public struct FfiConverterTypeModelDownloadHandle: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModelDownloadHandle_lift(_ handle: UInt64) throws -> ModelDownloadHandle {
-    return try FfiConverterTypeModelDownloadHandle.lift(handle)
+public func FfiConverterTypeModelDownloadHandle_lift(_ pointer: UnsafeMutableRawPointer) throws -> ModelDownloadHandle {
+    return try FfiConverterTypeModelDownloadHandle.lift(pointer)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeModelDownloadHandle_lower(_ value: ModelDownloadHandle) -> UInt64 {
+public func FfiConverterTypeModelDownloadHandle_lower(_ value: ModelDownloadHandle) -> UnsafeMutableRawPointer {
     return FfiConverterTypeModelDownloadHandle.lower(value)
 }
 
@@ -1106,13 +1107,13 @@ public protocol ProgressStreamProtocol: AnyObject, Sendable {
     
 }
 open class ProgressStream: ProgressStreamProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
+    fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public struct NoHandle {
+    public struct NoPointer {
         public init() {}
     }
 
@@ -1122,32 +1123,36 @@ open class ProgressStream: ProgressStreamProtocol, @unchecked Sendable {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
     }
 
     // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
     //
     // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
     }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_uzu_plus_fn_clone_progressstream(self.handle, $0) }
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_uzu_plus_fn_clone_progressstream(self.pointer, $0) }
     }
     // No primary constructor declared for this class.
 
     deinit {
-        try! rustCall { uniffi_uzu_plus_fn_free_progressstream(handle, $0) }
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_uzu_plus_fn_free_progressstream(pointer, $0) }
     }
 
     
@@ -1158,7 +1163,7 @@ open func next()async  -> ProgressUpdate?  {
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_uzu_plus_fn_method_progressstream_next(
-                    self.uniffiCloneHandle()
+                    self.uniffiClonePointer()
                     
                 )
             },
@@ -1172,7 +1177,6 @@ open func next()async  -> ProgressUpdate?  {
 }
     
 
-    
 }
 
 
@@ -1180,24 +1184,33 @@ open func next()async  -> ProgressUpdate?  {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeProgressStream: FfiConverter {
-    typealias FfiType = UInt64
+
+    typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = ProgressStream
 
-    public static func lift(_ handle: UInt64) throws -> ProgressStream {
-        return ProgressStream(unsafeFromHandle: handle)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> ProgressStream {
+        return ProgressStream(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: ProgressStream) -> UInt64 {
-        return value.uniffiCloneHandle()
+    public static func lower(_ value: ProgressStream) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProgressStream {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
     }
 
     public static func write(_ value: ProgressStream, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
     }
 }
 
@@ -1205,21 +1218,21 @@ public struct FfiConverterTypeProgressStream: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeProgressStream_lift(_ handle: UInt64) throws -> ProgressStream {
-    return try FfiConverterTypeProgressStream.lift(handle)
+public func FfiConverterTypeProgressStream_lift(_ pointer: UnsafeMutableRawPointer) throws -> ProgressStream {
+    return try FfiConverterTypeProgressStream.lift(pointer)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeProgressStream_lower(_ value: ProgressStream) -> UInt64 {
+public func FfiConverterTypeProgressStream_lower(_ value: ProgressStream) -> UnsafeMutableRawPointer {
     return FfiConverterTypeProgressStream.lower(value)
 }
 
 
 
 
-public struct ChatModel: Equatable, Hashable {
+public struct ChatModel {
     public var repoId: String
     public var type: ModelType
     public var name: String
@@ -1237,13 +1250,47 @@ public struct ChatModel: Equatable, Hashable {
         self.quantization = quantization
         self.outputParserRegex = outputParserRegex
     }
-
-    
 }
 
 #if compiler(>=6)
 extension ChatModel: Sendable {}
 #endif
+
+
+extension ChatModel: Equatable, Hashable {
+    public static func ==(lhs: ChatModel, rhs: ChatModel) -> Bool {
+        if lhs.repoId != rhs.repoId {
+            return false
+        }
+        if lhs.type != rhs.type {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.vendor != rhs.vendor {
+            return false
+        }
+        if lhs.quantization != rhs.quantization {
+            return false
+        }
+        if lhs.outputParserRegex != rhs.outputParserRegex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(repoId)
+        hasher.combine(type)
+        hasher.combine(name)
+        hasher.combine(vendor)
+        hasher.combine(quantization)
+        hasher.combine(outputParserRegex)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1287,7 +1334,7 @@ public func FfiConverterTypeChatModel_lower(_ value: ChatModel) -> RustBuffer {
 }
 
 
-public struct ClassificationFeature: Equatable, Hashable {
+public struct ClassificationFeature {
     public var name: String
     public var values: [String]
 
@@ -1297,13 +1344,31 @@ public struct ClassificationFeature: Equatable, Hashable {
         self.name = name
         self.values = values
     }
-
-    
 }
 
 #if compiler(>=6)
 extension ClassificationFeature: Sendable {}
 #endif
+
+
+extension ClassificationFeature: Equatable, Hashable {
+    public static func ==(lhs: ClassificationFeature, rhs: ClassificationFeature) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.values != rhs.values {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(values)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1339,7 +1404,7 @@ public func FfiConverterTypeClassificationFeature_lower(_ value: ClassificationF
 }
 
 
-public struct Config: Equatable, Hashable {
+public struct Config {
     public var preset: Preset
     public var contextMode: ContextMode
     public var contextLength: ContextLength
@@ -1357,13 +1422,47 @@ public struct Config: Equatable, Hashable {
         self.samplingSeed = samplingSeed
         self.asyncBatchSize = asyncBatchSize
     }
-
-    
 }
 
 #if compiler(>=6)
 extension Config: Sendable {}
 #endif
+
+
+extension Config: Equatable, Hashable {
+    public static func ==(lhs: Config, rhs: Config) -> Bool {
+        if lhs.preset != rhs.preset {
+            return false
+        }
+        if lhs.contextMode != rhs.contextMode {
+            return false
+        }
+        if lhs.contextLength != rhs.contextLength {
+            return false
+        }
+        if lhs.prefillStepSize != rhs.prefillStepSize {
+            return false
+        }
+        if lhs.samplingSeed != rhs.samplingSeed {
+            return false
+        }
+        if lhs.asyncBatchSize != rhs.asyncBatchSize {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(preset)
+        hasher.combine(contextMode)
+        hasher.combine(contextLength)
+        hasher.combine(prefillStepSize)
+        hasher.combine(samplingSeed)
+        hasher.combine(asyncBatchSize)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1407,7 +1506,7 @@ public func FfiConverterTypeConfig_lower(_ value: Config) -> RustBuffer {
 }
 
 
-public struct Message: Equatable, Hashable {
+public struct Message {
     public var role: Role
     public var content: String
     public var reasoningContent: String?
@@ -1419,13 +1518,35 @@ public struct Message: Equatable, Hashable {
         self.content = content
         self.reasoningContent = reasoningContent
     }
-
-    
 }
 
 #if compiler(>=6)
 extension Message: Sendable {}
 #endif
+
+
+extension Message: Equatable, Hashable {
+    public static func ==(lhs: Message, rhs: Message) -> Bool {
+        if lhs.role != rhs.role {
+            return false
+        }
+        if lhs.content != rhs.content {
+            return false
+        }
+        if lhs.reasoningContent != rhs.reasoningContent {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(role)
+        hasher.combine(content)
+        hasher.combine(reasoningContent)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1463,7 +1584,7 @@ public func FfiConverterTypeMessage_lower(_ value: Message) -> RustBuffer {
 }
 
 
-public struct ModelDownloadState: Equatable, Hashable {
+public struct ModelDownloadState {
     /**
      * Total size of all model files in kilobytes.
      */
@@ -1501,13 +1622,39 @@ public struct ModelDownloadState: Equatable, Hashable {
         self.phase = phase
         self.error = error
     }
-
-    
 }
 
 #if compiler(>=6)
 extension ModelDownloadState: Sendable {}
 #endif
+
+
+extension ModelDownloadState: Equatable, Hashable {
+    public static func ==(lhs: ModelDownloadState, rhs: ModelDownloadState) -> Bool {
+        if lhs.totalKbytes != rhs.totalKbytes {
+            return false
+        }
+        if lhs.downloadedKbytes != rhs.downloadedKbytes {
+            return false
+        }
+        if lhs.phase != rhs.phase {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalKbytes)
+        hasher.combine(downloadedKbytes)
+        hasher.combine(phase)
+        hasher.combine(error)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1547,7 +1694,7 @@ public func FfiConverterTypeModelDownloadState_lower(_ value: ModelDownloadState
 }
 
 
-public struct Output: Equatable, Hashable {
+public struct Output {
     public var text: Text
     public var stats: Stats
     public var finishReason: FinishReason?
@@ -1559,13 +1706,35 @@ public struct Output: Equatable, Hashable {
         self.stats = stats
         self.finishReason = finishReason
     }
-
-    
 }
 
 #if compiler(>=6)
 extension Output: Sendable {}
 #endif
+
+
+extension Output: Equatable, Hashable {
+    public static func ==(lhs: Output, rhs: Output) -> Bool {
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.stats != rhs.stats {
+            return false
+        }
+        if lhs.finishReason != rhs.finishReason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        hasher.combine(stats)
+        hasher.combine(finishReason)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1603,7 +1772,7 @@ public func FfiConverterTypeOutput_lower(_ value: Output) -> RustBuffer {
 }
 
 
-public struct ParsedText: Equatable, Hashable {
+public struct ParsedText {
     public var chainOfThought: String?
     public var response: String?
 
@@ -1613,13 +1782,31 @@ public struct ParsedText: Equatable, Hashable {
         self.chainOfThought = chainOfThought
         self.response = response
     }
-
-    
 }
 
 #if compiler(>=6)
 extension ParsedText: Sendable {}
 #endif
+
+
+extension ParsedText: Equatable, Hashable {
+    public static func ==(lhs: ParsedText, rhs: ParsedText) -> Bool {
+        if lhs.chainOfThought != rhs.chainOfThought {
+            return false
+        }
+        if lhs.response != rhs.response {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(chainOfThought)
+        hasher.combine(response)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1655,7 +1842,7 @@ public func FfiConverterTypeParsedText_lower(_ value: ParsedText) -> RustBuffer 
 }
 
 
-public struct ProgressUpdate: Equatable, Hashable {
+public struct ProgressUpdate {
     /**
      * Bytes downloaded so far.
      */
@@ -1685,13 +1872,35 @@ public struct ProgressUpdate: Equatable, Hashable {
         self.totalBytes = totalBytes
         self.progress = progress
     }
-
-    
 }
 
 #if compiler(>=6)
 extension ProgressUpdate: Sendable {}
 #endif
+
+
+extension ProgressUpdate: Equatable, Hashable {
+    public static func ==(lhs: ProgressUpdate, rhs: ProgressUpdate) -> Bool {
+        if lhs.completedBytes != rhs.completedBytes {
+            return false
+        }
+        if lhs.totalBytes != rhs.totalBytes {
+            return false
+        }
+        if lhs.progress != rhs.progress {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(completedBytes)
+        hasher.combine(totalBytes)
+        hasher.combine(progress)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1729,7 +1938,7 @@ public func FfiConverterTypeProgressUpdate_lower(_ value: ProgressUpdate) -> Rus
 }
 
 
-public struct RunConfig: Equatable, Hashable {
+public struct RunConfig {
     public var tokensLimit: Int64
     public var enableThinking: Bool
     public var samplingPolicy: SamplingPolicy
@@ -1743,13 +1952,39 @@ public struct RunConfig: Equatable, Hashable {
         self.samplingPolicy = samplingPolicy
         self.grammarConfig = grammarConfig
     }
-
-    
 }
 
 #if compiler(>=6)
 extension RunConfig: Sendable {}
 #endif
+
+
+extension RunConfig: Equatable, Hashable {
+    public static func ==(lhs: RunConfig, rhs: RunConfig) -> Bool {
+        if lhs.tokensLimit != rhs.tokensLimit {
+            return false
+        }
+        if lhs.enableThinking != rhs.enableThinking {
+            return false
+        }
+        if lhs.samplingPolicy != rhs.samplingPolicy {
+            return false
+        }
+        if lhs.grammarConfig != rhs.grammarConfig {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(tokensLimit)
+        hasher.combine(enableThinking)
+        hasher.combine(samplingPolicy)
+        hasher.combine(grammarConfig)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1789,7 +2024,7 @@ public func FfiConverterTypeRunConfig_lower(_ value: RunConfig) -> RustBuffer {
 }
 
 
-public struct RunStats: Equatable, Hashable {
+public struct RunStats {
     public var count: UInt64
     public var averageDuration: Double
 
@@ -1799,13 +2034,31 @@ public struct RunStats: Equatable, Hashable {
         self.count = count
         self.averageDuration = averageDuration
     }
-
-    
 }
 
 #if compiler(>=6)
 extension RunStats: Sendable {}
 #endif
+
+
+extension RunStats: Equatable, Hashable {
+    public static func ==(lhs: RunStats, rhs: RunStats) -> Bool {
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.averageDuration != rhs.averageDuration {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(count)
+        hasher.combine(averageDuration)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1841,7 +2094,7 @@ public func FfiConverterTypeRunStats_lower(_ value: RunStats) -> RustBuffer {
 }
 
 
-public struct Stats: Equatable, Hashable {
+public struct Stats {
     public var prefillStats: StepStats
     public var generateStats: StepStats?
     public var totalStats: TotalStats
@@ -1853,13 +2106,35 @@ public struct Stats: Equatable, Hashable {
         self.generateStats = generateStats
         self.totalStats = totalStats
     }
-
-    
 }
 
 #if compiler(>=6)
 extension Stats: Sendable {}
 #endif
+
+
+extension Stats: Equatable, Hashable {
+    public static func ==(lhs: Stats, rhs: Stats) -> Bool {
+        if lhs.prefillStats != rhs.prefillStats {
+            return false
+        }
+        if lhs.generateStats != rhs.generateStats {
+            return false
+        }
+        if lhs.totalStats != rhs.totalStats {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(prefillStats)
+        hasher.combine(generateStats)
+        hasher.combine(totalStats)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1897,7 +2172,7 @@ public func FfiConverterTypeStats_lower(_ value: Stats) -> RustBuffer {
 }
 
 
-public struct StepStats: Equatable, Hashable {
+public struct StepStats {
     public var duration: Double
     public var suffixLength: UInt64
     public var tokensCount: UInt64
@@ -1917,13 +2192,51 @@ public struct StepStats: Equatable, Hashable {
         self.modelRun = modelRun
         self.run = run
     }
-
-    
 }
 
 #if compiler(>=6)
 extension StepStats: Sendable {}
 #endif
+
+
+extension StepStats: Equatable, Hashable {
+    public static func ==(lhs: StepStats, rhs: StepStats) -> Bool {
+        if lhs.duration != rhs.duration {
+            return false
+        }
+        if lhs.suffixLength != rhs.suffixLength {
+            return false
+        }
+        if lhs.tokensCount != rhs.tokensCount {
+            return false
+        }
+        if lhs.tokensPerSecond != rhs.tokensPerSecond {
+            return false
+        }
+        if lhs.processedTokensPerSecond != rhs.processedTokensPerSecond {
+            return false
+        }
+        if lhs.modelRun != rhs.modelRun {
+            return false
+        }
+        if lhs.run != rhs.run {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(duration)
+        hasher.combine(suffixLength)
+        hasher.combine(tokensCount)
+        hasher.combine(tokensPerSecond)
+        hasher.combine(processedTokensPerSecond)
+        hasher.combine(modelRun)
+        hasher.combine(run)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -1969,7 +2282,7 @@ public func FfiConverterTypeStepStats_lower(_ value: StepStats) -> RustBuffer {
 }
 
 
-public struct Text: Equatable, Hashable {
+public struct Text {
     public var original: String
     public var parsed: ParsedText
 
@@ -1979,13 +2292,31 @@ public struct Text: Equatable, Hashable {
         self.original = original
         self.parsed = parsed
     }
-
-    
 }
 
 #if compiler(>=6)
 extension Text: Sendable {}
 #endif
+
+
+extension Text: Equatable, Hashable {
+    public static func ==(lhs: Text, rhs: Text) -> Bool {
+        if lhs.original != rhs.original {
+            return false
+        }
+        if lhs.parsed != rhs.parsed {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(original)
+        hasher.combine(parsed)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -2021,7 +2352,7 @@ public func FfiConverterTypeText_lower(_ value: Text) -> RustBuffer {
 }
 
 
-public struct TotalStats: Equatable, Hashable {
+public struct TotalStats {
     public var duration: Double
     public var tokensCountInput: UInt64
     public var tokensCountOutput: UInt64
@@ -2033,13 +2364,35 @@ public struct TotalStats: Equatable, Hashable {
         self.tokensCountInput = tokensCountInput
         self.tokensCountOutput = tokensCountOutput
     }
-
-    
 }
 
 #if compiler(>=6)
 extension TotalStats: Sendable {}
 #endif
+
+
+extension TotalStats: Equatable, Hashable {
+    public static func ==(lhs: TotalStats, rhs: TotalStats) -> Bool {
+        if lhs.duration != rhs.duration {
+            return false
+        }
+        if lhs.tokensCountInput != rhs.tokensCountInput {
+            return false
+        }
+        if lhs.tokensCountOutput != rhs.tokensCountOutput {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(duration)
+        hasher.combine(tokensCountInput)
+        hasher.combine(tokensCountOutput)
+    }
+}
+
+
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -2079,15 +2432,13 @@ public func FfiConverterTypeTotalStats_lower(_ value: TotalStats) -> RustBuffer 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum AsyncBatchSize: Equatable, Hashable {
+public enum AsyncBatchSize {
     
     case `default`
     case custom(size: Int64
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension AsyncBatchSize: Sendable {}
@@ -2144,19 +2495,21 @@ public func FfiConverterTypeAsyncBatchSize_lower(_ value: AsyncBatchSize) -> Rus
 }
 
 
+extension AsyncBatchSize: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum ContextLength: Equatable, Hashable {
+public enum ContextLength {
     
     case `default`
     case maximal
     case custom(length: Int64
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension ContextLength: Sendable {}
@@ -2219,19 +2572,21 @@ public func FfiConverterTypeContextLength_lower(_ value: ContextLength) -> RustB
 }
 
 
+extension ContextLength: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum ContextMode: Equatable, Hashable {
+public enum ContextMode {
     
     case none
     case `static`(input: Input
     )
     case dynamic
-
-
-
 }
+
 
 #if compiler(>=6)
 extension ContextMode: Sendable {}
@@ -2294,8 +2649,12 @@ public func FfiConverterTypeContextMode_lower(_ value: ContextMode) -> RustBuffe
 }
 
 
+extension ContextMode: Equatable, Hashable {}
 
-public enum EngineError: Swift.Error, Equatable, Hashable {
+
+
+
+public enum EngineError: Swift.Error {
 
     
     
@@ -2311,15 +2670,8 @@ public enum EngineError: Swift.Error, Equatable, Hashable {
     )
     case MutexError
     case HandlerError
-
-    
-
-    
 }
 
-#if compiler(>=6)
-extension EngineError: Sendable {}
-#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -2415,7 +2767,13 @@ public func FfiConverterTypeEngineError_lower(_ value: EngineError) -> RustBuffe
 }
 
 
-public enum Error: Swift.Error, Equatable, Hashable {
+extension EngineError: Equatable, Hashable {}
+
+
+
+
+
+public enum Error: Swift.Error {
 
     
     
@@ -2454,15 +2812,8 @@ public enum Error: Swift.Error, Equatable, Hashable {
     )
     case HttpError(code: UInt16, message: String
     )
-
-    
-
-    
 }
 
-#if compiler(>=6)
-extension Error: Sendable {}
-#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -2676,19 +3027,23 @@ public func FfiConverterTypeError_lower(_ value: Error) -> RustBuffer {
     return FfiConverterTypeError.lower(value)
 }
 
+
+extension Error: Equatable, Hashable {}
+
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum FinishReason: Equatable, Hashable {
+public enum FinishReason {
     
     case stop
     case length
     case cancelled
     case contextLimitReached
-
-
-
 }
+
 
 #if compiler(>=6)
 extension FinishReason: Sendable {}
@@ -2755,20 +3110,22 @@ public func FfiConverterTypeFinishReason_lower(_ value: FinishReason) -> RustBuf
 }
 
 
+extension FinishReason: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum GrammarConfig: Equatable, Hashable {
+public enum GrammarConfig {
     
     case jsonSchema(schema: String
     )
     case regex(pattern: String
     )
     case builtinJson
-
-
-
 }
+
 
 #if compiler(>=6)
 extension GrammarConfig: Sendable {}
@@ -2833,19 +3190,21 @@ public func FfiConverterTypeGrammarConfig_lower(_ value: GrammarConfig) -> RustB
 }
 
 
+extension GrammarConfig: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum Input: Equatable, Hashable {
+public enum Input {
     
     case text(text: String
     )
     case messages(messages: [Message]
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension Input: Sendable {}
@@ -2904,10 +3263,14 @@ public func FfiConverterTypeInput_lower(_ value: Input) -> RustBuffer {
 }
 
 
+extension Input: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum LicenseStatus: Equatable, Hashable {
+public enum LicenseStatus {
     
     case notActivated
     case paymentRequired
@@ -2925,10 +3288,8 @@ public enum LicenseStatus: Equatable, Hashable {
      */
     case httpError(code: UInt16
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension LicenseStatus: Sendable {}
@@ -3027,10 +3388,14 @@ public func FfiConverterTypeLicenseStatus_lower(_ value: LicenseStatus) -> RustB
 }
 
 
+extension LicenseStatus: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum ModelDownloadPhase: Equatable, Hashable {
+public enum ModelDownloadPhase {
     
     case notDownloaded
     case downloading
@@ -3038,10 +3403,8 @@ public enum ModelDownloadPhase: Equatable, Hashable {
     case downloaded
     case locked
     case error
-
-
-
 }
+
 
 #if compiler(>=6)
 extension ModelDownloadPhase: Sendable {}
@@ -3120,8 +3483,12 @@ public func FfiConverterTypeModelDownloadPhase_lower(_ value: ModelDownloadPhase
 }
 
 
+extension ModelDownloadPhase: Equatable, Hashable {}
 
-public enum ModelStorageError: Swift.Error, Equatable, Hashable {
+
+
+
+public enum ModelStorageError: Swift.Error {
 
     
     
@@ -3140,15 +3507,8 @@ public enum ModelStorageError: Swift.Error, Equatable, Hashable {
     case FileVerificationFailed(message: String
     )
     case Paused
-
-    
-
-    
 }
 
-#if compiler(>=6)
-extension ModelStorageError: Sendable {}
-#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -3254,17 +3614,21 @@ public func FfiConverterTypeModelStorageError_lower(_ value: ModelStorageError) 
     return FfiConverterTypeModelStorageError.lower(value)
 }
 
+
+extension ModelStorageError: Equatable, Hashable {}
+
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum ModelType: Equatable, Hashable {
+public enum ModelType {
     
     case local
     case cloud
-
-
-
 }
+
 
 #if compiler(>=6)
 extension ModelType: Sendable {}
@@ -3319,8 +3683,12 @@ public func FfiConverterTypeModelType_lower(_ value: ModelType) -> RustBuffer {
 }
 
 
+extension ModelType: Equatable, Hashable {}
 
-public enum NetworkError: Swift.Error, Equatable, Hashable {
+
+
+
+public enum NetworkError: Swift.Error {
 
     
     
@@ -3333,15 +3701,8 @@ public enum NetworkError: Swift.Error, Equatable, Hashable {
     case Join(message: String
     )
     case Timeout
-
-    
-
-    
 }
 
-#if compiler(>=6)
-extension NetworkError: Sendable {}
-#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -3423,19 +3784,23 @@ public func FfiConverterTypeNetworkError_lower(_ value: NetworkError) -> RustBuf
     return FfiConverterTypeNetworkError.lower(value)
 }
 
+
+extension NetworkError: Equatable, Hashable {}
+
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum PrefillStepSize: Equatable, Hashable {
+public enum PrefillStepSize {
     
     case `default`
     case maximal
     case custom(length: Int64
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension PrefillStepSize: Sendable {}
@@ -3498,19 +3863,21 @@ public func FfiConverterTypePrefillStepSize_lower(_ value: PrefillStepSize) -> R
 }
 
 
+extension PrefillStepSize: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum Preset: Equatable, Hashable {
+public enum Preset {
     
     case general
     case classification(feature: ClassificationFeature
     )
     case summarization
-
-
-
 }
+
 
 #if compiler(>=6)
 extension Preset: Sendable {}
@@ -3573,18 +3940,20 @@ public func FfiConverterTypePreset_lower(_ value: Preset) -> RustBuffer {
 }
 
 
+extension Preset: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum Role: Equatable, Hashable {
+public enum Role {
     
     case system
     case user
     case assistant
-
-
-
 }
+
 
 #if compiler(>=6)
 extension Role: Sendable {}
@@ -3645,18 +4014,20 @@ public func FfiConverterTypeRole_lower(_ value: Role) -> RustBuffer {
 }
 
 
+extension Role: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum SamplingMethod: Equatable, Hashable {
+public enum SamplingMethod {
     
     case greedy
     case stochastic(temperature: Double?, topK: Int64?, topP: Double?, minP: Double?
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension SamplingMethod: Sendable {}
@@ -3716,18 +4087,20 @@ public func FfiConverterTypeSamplingMethod_lower(_ value: SamplingMethod) -> Rus
 }
 
 
+extension SamplingMethod: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum SamplingPolicy: Equatable, Hashable {
+public enum SamplingPolicy {
     
     case `default`
     case custom(value: SamplingMethod
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension SamplingPolicy: Sendable {}
@@ -3784,18 +4157,20 @@ public func FfiConverterTypeSamplingPolicy_lower(_ value: SamplingPolicy) -> Rus
 }
 
 
+extension SamplingPolicy: Equatable, Hashable {}
+
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
-public enum SamplingSeed: Equatable, Hashable {
+public enum SamplingSeed {
     
     case `default`
     case custom(seed: Int64
     )
-
-
-
 }
+
 
 #if compiler(>=6)
 extension SamplingSeed: Sendable {}
@@ -3852,8 +4227,12 @@ public func FfiConverterTypeSamplingSeed_lower(_ value: SamplingSeed) -> RustBuf
 }
 
 
+extension SamplingSeed: Equatable, Hashable {}
 
-public enum StorageError: Swift.Error, Equatable, Hashable {
+
+
+
+public enum StorageError: Swift.Error {
 
     
     
@@ -3865,15 +4244,8 @@ public enum StorageError: Swift.Error, Equatable, Hashable {
     case MutexPoisoned(message: String
     )
     case LicenseNotActivated
-
-    
-
-    
 }
 
-#if compiler(>=6)
-extension StorageError: Sendable {}
-#endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -3953,6 +4325,12 @@ public func FfiConverterTypeStorageError_lower(_ value: StorageError) -> RustBuf
 }
 
 
+extension StorageError: Equatable, Hashable {}
+
+
+
+
+
 
 
 /**
@@ -3963,7 +4341,13 @@ public protocol ChatModelsHandler: AnyObject, Sendable {
     func onChatModelsChanged(models: [ChatModel]) 
     
 }
-
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 // Put the implementation in a struct so we don't pollute the top-level namespace
 fileprivate struct UniffiCallbackInterfaceChatModelsHandler {
@@ -3974,20 +4358,6 @@ fileprivate struct UniffiCallbackInterfaceChatModelsHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceChatModelsHandler] = [UniffiVTableCallbackInterfaceChatModelsHandler(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterCallbackInterfaceChatModelsHandler.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface ChatModelsHandler: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterCallbackInterfaceChatModelsHandler.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface ChatModelsHandler: handle missing in uniffiClone")
-            }
-        },
         onChatModelsChanged: { (
             uniffiHandle: UInt64,
             models: RustBuffer,
@@ -4011,6 +4381,12 @@ fileprivate struct UniffiCallbackInterfaceChatModelsHandler {
                 makeCall: makeCall,
                 writeReturn: writeReturn
             )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceChatModelsHandler.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ChatModelsHandler: handle missing in uniffiFree")
+            }
         }
     )]
 }
@@ -4101,20 +4477,6 @@ fileprivate struct UniffiCallbackInterfaceLicenseStatusHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceLicenseStatusHandler] = [UniffiVTableCallbackInterfaceLicenseStatusHandler(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterCallbackInterfaceLicenseStatusHandler.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface LicenseStatusHandler: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterCallbackInterfaceLicenseStatusHandler.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface LicenseStatusHandler: handle missing in uniffiClone")
-            }
-        },
         onLicenseStatusChanged: { (
             uniffiHandle: UInt64,
             status: RustBuffer,
@@ -4138,6 +4500,12 @@ fileprivate struct UniffiCallbackInterfaceLicenseStatusHandler {
                 makeCall: makeCall,
                 writeReturn: writeReturn
             )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceLicenseStatusHandler.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface LicenseStatusHandler: handle missing in uniffiFree")
+            }
         }
     )]
 }
@@ -4228,20 +4596,6 @@ fileprivate struct UniffiCallbackInterfaceModelDownloadStateHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceModelDownloadStateHandler] = [UniffiVTableCallbackInterfaceModelDownloadStateHandler(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterCallbackInterfaceModelDownloadStateHandler.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface ModelDownloadStateHandler: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterCallbackInterfaceModelDownloadStateHandler.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface ModelDownloadStateHandler: handle missing in uniffiClone")
-            }
-        },
         onModelDownloadStateChanged: { (
             uniffiHandle: UInt64,
             repoId: RustBuffer,
@@ -4267,6 +4621,12 @@ fileprivate struct UniffiCallbackInterfaceModelDownloadStateHandler {
                 makeCall: makeCall,
                 writeReturn: writeReturn
             )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceModelDownloadStateHandler.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ModelDownloadStateHandler: handle missing in uniffiFree")
+            }
         }
     )]
 }
@@ -4354,20 +4714,6 @@ fileprivate struct UniffiCallbackInterfaceProgressHandler {
     // This creates 1-element array, since this seems to be the only way to construct a const
     // pointer that we can pass to the Rust code.
     static let vtable: [UniffiVTableCallbackInterfaceProgressHandler] = [UniffiVTableCallbackInterfaceProgressHandler(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterCallbackInterfaceProgressHandler.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface ProgressHandler: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterCallbackInterfaceProgressHandler.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface ProgressHandler: handle missing in uniffiClone")
-            }
-        },
         onProgress: { (
             uniffiHandle: UInt64,
             output: RustBuffer,
@@ -4391,6 +4737,12 @@ fileprivate struct UniffiCallbackInterfaceProgressHandler {
                 makeCall: makeCall,
                 writeReturn: writeReturn
             )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceProgressHandler.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ProgressHandler: handle missing in uniffiFree")
+            }
         }
     )]
 }
@@ -4823,7 +5175,7 @@ fileprivate struct FfiConverterSequenceTypeModelType: FfiConverterRustBuffer {
     }
 }
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
-private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
+private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
 
 fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
 
@@ -4847,9 +5199,7 @@ fileprivate func uniffiRustCallAsync<F, T>(
         pollResult = await withUnsafeContinuation {
             pollFunc(
                 rustFuture,
-                { handle, pollResult in
-                    uniffiFutureContinuationCallback(handle: handle, pollResult: pollResult)
-                },
+                uniffiFutureContinuationCallback,
                 uniffiContinuationHandleMap.insert(obj: $0)
             )
         }
@@ -4887,7 +5237,7 @@ private enum InitializationResult {
 // the code inside is only computed once.
 private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
-    let bindings_contract_version = 30
+    let bindings_contract_version = 29
     // Get the scaffolding contract version by calling the into the dylib
     let scaffolding_contract_version = ffi_uzu_plus_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
