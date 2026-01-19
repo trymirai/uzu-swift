@@ -3,7 +3,7 @@ import Uzu
 public func runSSM() async throws {
     let engine = try await UzuEngine.create(apiKey: "API_KEY")
 
-    let model = try await engine.chatModel(repoId: "cartesia-ai/Llamba-1B-4bit-mlx")
+    let model = try await engine.chatModel(repoId: "LiquidAI/LFM2-700M")
     try await engine.downloadChatModel(model) { update in
         print("Progress: \(update.progress)")
     }
