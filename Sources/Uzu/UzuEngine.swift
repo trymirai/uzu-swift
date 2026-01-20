@@ -90,6 +90,10 @@ public final class UzuEngine {
         
         return try engine.createChatSession(model: chatModel, config: config)
     }
+
+    public func benchmark(_ task: BenchmarksTask) async throws -> [BenchmarksResult] {
+        return try await self.engine.benchmark(task: task)
+    }
 }
 
 extension UzuEngine: LicenseStatusHandler {

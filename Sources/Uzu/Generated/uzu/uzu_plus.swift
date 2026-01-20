@@ -682,6 +682,8 @@ public protocol EngineProtocol: AnyObject, Sendable {
     
     func activate(apiKey: String) async throws  -> LicenseStatus
     
+    func benchmark(task: BenchmarksTask) async throws  -> [BenchmarksResult]
+    
     func createChatSession(model: ChatModel, config: Config) throws  -> ChatSession
     
     func createModelDownloadHandle(repoId: String) throws  -> ModelDownloadHandle
@@ -769,6 +771,23 @@ open func activate(apiKey: String)async throws  -> LicenseStatus  {
             completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
             freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeLicenseStatus_lift,
+            errorHandler: FfiConverterTypeEngineError_lift
+        )
+}
+    
+open func benchmark(task: BenchmarksTask)async throws  -> [BenchmarksResult]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_uzu_plus_fn_method_engine_benchmark(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeBenchmarksTask_lower(task)
+                )
+            },
+            pollFunc: ffi_uzu_plus_rust_future_poll_rust_buffer,
+            completeFunc: ffi_uzu_plus_rust_future_complete_rust_buffer,
+            freeFunc: ffi_uzu_plus_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeBenchmarksResult.lift,
             errorHandler: FfiConverterTypeEngineError_lift
         )
 }
@@ -1230,6 +1249,336 @@ public func FfiConverterTypeProgressStream_lower(_ value: ProgressStream) -> Uns
 }
 
 
+
+
+public struct BenchmarksDevice {
+    public var osName: String?
+    public var cpuName: String?
+    public var memoryTotal: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(osName: String?, cpuName: String?, memoryTotal: Int64) {
+        self.osName = osName
+        self.cpuName = cpuName
+        self.memoryTotal = memoryTotal
+    }
+}
+
+#if compiler(>=6)
+extension BenchmarksDevice: Sendable {}
+#endif
+
+
+extension BenchmarksDevice: Equatable, Hashable {
+    public static func ==(lhs: BenchmarksDevice, rhs: BenchmarksDevice) -> Bool {
+        if lhs.osName != rhs.osName {
+            return false
+        }
+        if lhs.cpuName != rhs.cpuName {
+            return false
+        }
+        if lhs.memoryTotal != rhs.memoryTotal {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(osName)
+        hasher.combine(cpuName)
+        hasher.combine(memoryTotal)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBenchmarksDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BenchmarksDevice {
+        return
+            try BenchmarksDevice(
+                osName: FfiConverterOptionString.read(from: &buf), 
+                cpuName: FfiConverterOptionString.read(from: &buf), 
+                memoryTotal: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BenchmarksDevice, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.osName, into: &buf)
+        FfiConverterOptionString.write(value.cpuName, into: &buf)
+        FfiConverterInt64.write(value.memoryTotal, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksDevice_lift(_ buf: RustBuffer) throws -> BenchmarksDevice {
+    return try FfiConverterTypeBenchmarksDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksDevice_lower(_ value: BenchmarksDevice) -> RustBuffer {
+    return FfiConverterTypeBenchmarksDevice.lower(value)
+}
+
+
+public struct BenchmarksResult {
+    public var task: BenchmarksTask
+    public var device: BenchmarksDevice
+    public var engineVersion: String
+    public var timestamp: Int64
+    public var precision: DataType?
+    public var memoryUsed: Int64?
+    public var tokensCountInput: Int64
+    public var tokensCountOutput: Int64
+    public var timeToFirstToken: Double
+    public var promptTokensPerSecond: Double
+    public var generateTokensPerSecond: Double?
+    public var text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(task: BenchmarksTask, device: BenchmarksDevice, engineVersion: String, timestamp: Int64, precision: DataType?, memoryUsed: Int64?, tokensCountInput: Int64, tokensCountOutput: Int64, timeToFirstToken: Double, promptTokensPerSecond: Double, generateTokensPerSecond: Double?, text: String) {
+        self.task = task
+        self.device = device
+        self.engineVersion = engineVersion
+        self.timestamp = timestamp
+        self.precision = precision
+        self.memoryUsed = memoryUsed
+        self.tokensCountInput = tokensCountInput
+        self.tokensCountOutput = tokensCountOutput
+        self.timeToFirstToken = timeToFirstToken
+        self.promptTokensPerSecond = promptTokensPerSecond
+        self.generateTokensPerSecond = generateTokensPerSecond
+        self.text = text
+    }
+}
+
+#if compiler(>=6)
+extension BenchmarksResult: Sendable {}
+#endif
+
+
+extension BenchmarksResult: Equatable, Hashable {
+    public static func ==(lhs: BenchmarksResult, rhs: BenchmarksResult) -> Bool {
+        if lhs.task != rhs.task {
+            return false
+        }
+        if lhs.device != rhs.device {
+            return false
+        }
+        if lhs.engineVersion != rhs.engineVersion {
+            return false
+        }
+        if lhs.timestamp != rhs.timestamp {
+            return false
+        }
+        if lhs.precision != rhs.precision {
+            return false
+        }
+        if lhs.memoryUsed != rhs.memoryUsed {
+            return false
+        }
+        if lhs.tokensCountInput != rhs.tokensCountInput {
+            return false
+        }
+        if lhs.tokensCountOutput != rhs.tokensCountOutput {
+            return false
+        }
+        if lhs.timeToFirstToken != rhs.timeToFirstToken {
+            return false
+        }
+        if lhs.promptTokensPerSecond != rhs.promptTokensPerSecond {
+            return false
+        }
+        if lhs.generateTokensPerSecond != rhs.generateTokensPerSecond {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(task)
+        hasher.combine(device)
+        hasher.combine(engineVersion)
+        hasher.combine(timestamp)
+        hasher.combine(precision)
+        hasher.combine(memoryUsed)
+        hasher.combine(tokensCountInput)
+        hasher.combine(tokensCountOutput)
+        hasher.combine(timeToFirstToken)
+        hasher.combine(promptTokensPerSecond)
+        hasher.combine(generateTokensPerSecond)
+        hasher.combine(text)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBenchmarksResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BenchmarksResult {
+        return
+            try BenchmarksResult(
+                task: FfiConverterTypeBenchmarksTask.read(from: &buf), 
+                device: FfiConverterTypeBenchmarksDevice.read(from: &buf), 
+                engineVersion: FfiConverterString.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf), 
+                precision: FfiConverterOptionTypeDataType.read(from: &buf), 
+                memoryUsed: FfiConverterOptionInt64.read(from: &buf), 
+                tokensCountInput: FfiConverterInt64.read(from: &buf), 
+                tokensCountOutput: FfiConverterInt64.read(from: &buf), 
+                timeToFirstToken: FfiConverterDouble.read(from: &buf), 
+                promptTokensPerSecond: FfiConverterDouble.read(from: &buf), 
+                generateTokensPerSecond: FfiConverterOptionDouble.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BenchmarksResult, into buf: inout [UInt8]) {
+        FfiConverterTypeBenchmarksTask.write(value.task, into: &buf)
+        FfiConverterTypeBenchmarksDevice.write(value.device, into: &buf)
+        FfiConverterString.write(value.engineVersion, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+        FfiConverterOptionTypeDataType.write(value.precision, into: &buf)
+        FfiConverterOptionInt64.write(value.memoryUsed, into: &buf)
+        FfiConverterInt64.write(value.tokensCountInput, into: &buf)
+        FfiConverterInt64.write(value.tokensCountOutput, into: &buf)
+        FfiConverterDouble.write(value.timeToFirstToken, into: &buf)
+        FfiConverterDouble.write(value.promptTokensPerSecond, into: &buf)
+        FfiConverterOptionDouble.write(value.generateTokensPerSecond, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksResult_lift(_ buf: RustBuffer) throws -> BenchmarksResult {
+    return try FfiConverterTypeBenchmarksResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksResult_lower(_ value: BenchmarksResult) -> RustBuffer {
+    return FfiConverterTypeBenchmarksResult.lower(value)
+}
+
+
+public struct BenchmarksTask {
+    public var identifier: String
+    public var repoId: String
+    public var numberOfRuns: Int64
+    public var tokensLimit: Int64
+    public var messages: [Message]
+    public var greedy: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identifier: String, repoId: String, numberOfRuns: Int64, tokensLimit: Int64, messages: [Message], greedy: Bool) {
+        self.identifier = identifier
+        self.repoId = repoId
+        self.numberOfRuns = numberOfRuns
+        self.tokensLimit = tokensLimit
+        self.messages = messages
+        self.greedy = greedy
+    }
+}
+
+#if compiler(>=6)
+extension BenchmarksTask: Sendable {}
+#endif
+
+
+extension BenchmarksTask: Equatable, Hashable {
+    public static func ==(lhs: BenchmarksTask, rhs: BenchmarksTask) -> Bool {
+        if lhs.identifier != rhs.identifier {
+            return false
+        }
+        if lhs.repoId != rhs.repoId {
+            return false
+        }
+        if lhs.numberOfRuns != rhs.numberOfRuns {
+            return false
+        }
+        if lhs.tokensLimit != rhs.tokensLimit {
+            return false
+        }
+        if lhs.messages != rhs.messages {
+            return false
+        }
+        if lhs.greedy != rhs.greedy {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(identifier)
+        hasher.combine(repoId)
+        hasher.combine(numberOfRuns)
+        hasher.combine(tokensLimit)
+        hasher.combine(messages)
+        hasher.combine(greedy)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBenchmarksTask: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BenchmarksTask {
+        return
+            try BenchmarksTask(
+                identifier: FfiConverterString.read(from: &buf), 
+                repoId: FfiConverterString.read(from: &buf), 
+                numberOfRuns: FfiConverterInt64.read(from: &buf), 
+                tokensLimit: FfiConverterInt64.read(from: &buf), 
+                messages: FfiConverterSequenceTypeMessage.read(from: &buf), 
+                greedy: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BenchmarksTask, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.identifier, into: &buf)
+        FfiConverterString.write(value.repoId, into: &buf)
+        FfiConverterInt64.write(value.numberOfRuns, into: &buf)
+        FfiConverterInt64.write(value.tokensLimit, into: &buf)
+        FfiConverterSequenceTypeMessage.write(value.messages, into: &buf)
+        FfiConverterBool.write(value.greedy, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksTask_lift(_ buf: RustBuffer) throws -> BenchmarksTask {
+    return try FfiConverterTypeBenchmarksTask.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBenchmarksTask_lower(_ value: BenchmarksTask) -> RustBuffer {
+    return FfiConverterTypeBenchmarksTask.lower(value)
+}
 
 
 public struct ChatModel {
@@ -2653,6 +3002,94 @@ extension ContextMode: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum DataType {
+    
+    case bFloat16
+    case float16
+    case float32
+    case int4
+    case int8
+}
+
+
+#if compiler(>=6)
+extension DataType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDataType: FfiConverterRustBuffer {
+    typealias SwiftType = DataType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DataType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .bFloat16
+        
+        case 2: return .float16
+        
+        case 3: return .float32
+        
+        case 4: return .int4
+        
+        case 5: return .int8
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DataType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .bFloat16:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .float16:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .float32:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .int4:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .int8:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDataType_lift(_ buf: RustBuffer) throws -> DataType {
+    return try FfiConverterTypeDataType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDataType_lower(_ value: DataType) -> RustBuffer {
+    return FfiConverterTypeDataType.lower(value)
+}
+
+
+extension DataType: Equatable, Hashable {}
+
+
+
 
 public enum EngineError: Swift.Error {
 
@@ -2670,6 +3107,7 @@ public enum EngineError: Swift.Error {
     )
     case MutexError
     case HandlerError
+    case BenchmarkError
 }
 
 
@@ -2703,6 +3141,7 @@ public struct FfiConverterTypeEngineError: FfiConverterRustBuffer {
             )
         case 6: return .MutexError
         case 7: return .HandlerError
+        case 8: return .BenchmarkError
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2746,6 +3185,10 @@ public struct FfiConverterTypeEngineError: FfiConverterRustBuffer {
         
         case .HandlerError:
             writeInt(&buf, Int32(7))
+        
+        
+        case .BenchmarkError:
+            writeInt(&buf, Int32(8))
         
         }
     }
@@ -4958,6 +5401,30 @@ fileprivate struct FfiConverterOptionTypeStepStats: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeDataType: FfiConverterRustBuffer {
+    typealias SwiftType = DataType?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeDataType.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeDataType.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeFinishReason: FfiConverterRustBuffer {
     typealias SwiftType = FinishReason?
 
@@ -5095,6 +5562,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeBenchmarksResult: FfiConverterRustBuffer {
+    typealias SwiftType = [BenchmarksResult]
+
+    public static func write(_ value: [BenchmarksResult], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeBenchmarksResult.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [BenchmarksResult] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [BenchmarksResult]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeBenchmarksResult.read(from: &buf))
         }
         return seq
     }
@@ -5253,6 +5745,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_activate() != 42274) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_uzu_plus_checksum_method_engine_benchmark() != 60206) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_uzu_plus_checksum_method_engine_createchatsession() != 5955) {
