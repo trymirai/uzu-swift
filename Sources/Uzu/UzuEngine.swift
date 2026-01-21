@@ -91,8 +91,8 @@ public final class UzuEngine {
         return try engine.createChatSession(model: chatModel, config: config)
     }
 
-    public func benchmark(_ task: BenchmarksTask) async throws -> [BenchmarksResult] {
-        return try await self.engine.benchmark(task: task)
+    public func benchmark(_ task: BenchmarksTask, prefillStepSize: Int64? = nil) async throws -> [BenchmarksResult] {
+        return try await self.engine.benchmark(task: task, prefillStepSize: prefillStepSize)
     }
 }
 
